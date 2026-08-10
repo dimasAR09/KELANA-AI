@@ -1,0 +1,13 @@
+# initialize the repository
+git init
+# track files and directories
+git status
+# stage and commit your first feature
+git add .
+git commit -m "Create initial KelanaAI console app"
+git remote add origin https://github.com/dimasAR09/kelana-ai.git
+git remote -v
+git branch -M main
+git push -u origin main
+# push to GitHub (further push)
+git push
