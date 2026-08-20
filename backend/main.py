@@ -1,22 +1,33 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
+from database import SessionLocal, init_db
+from models.trip import Trip
 from services.trip_service import (
     calculate_daily_budget,
     get_trip_category,
     get_transportation
 )
+
+app = FastAPI()
+
+init_db()
+
 class TripRequest(BaseModel):
     destination: str
     days: int
     budget: float
     travel_style: Optional[str] = None
-app = FastAPI()
+
+class TripUpdate(BaseModel):
+    budget: float
+
 @app.get("/")
 def home():
     return{
         "message": "Welcome to KelanaAI"
     }
+
     #challenge session 3
 @app.post("/api/v1/trips")    
 def create_trip(request: TripRequest):
@@ -60,7 +71,29 @@ def create_trip(request: TripRequest):
         recommended_transport = "Flight"
     elif not recommended_transport or recommended_transport == "Unknown":
         recommended_transport = "Bus"
+
+    db = SessionLocal()
+    db_trip_id = None
+    try:
+        trip = Trip(
+            destination=request.destination,
+            days=request.days,
+            budget=request.budget,
+            category=category,
+            daily_budget=daily_budget,
+        )
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+        db_trip_id = trip.id
+    except Exception as e:
+        db.rollback()
+        print(f"Gagal menyimpan data ke database: {e}")
+    finally:
+        db.close()
+
     return {
+        "id": db_trip_id,
         "destination": request.destination,
         "budget": request.budget,
         "daily_budget": daily_budget,
@@ -68,9 +101,11 @@ def create_trip(request: TripRequest):
         "travel_style": selected_style,
         "recommended_transport": recommended_transport
     }
+
 @app.get("/api/v1/trip-categories")
 def list_trip_categories():
     return ["Backpacker", "Standard", "Luxury"]   
+
     # Homework Session 3 
 @app.get("/api/v1/recommendations")
 def get_recommendations(destination: Optional[str] = None):
@@ -110,6 +145,77 @@ def get_recommendations(destination: Optional[str] = None):
         return default_Japan + default_Bali + default_Australia
     except Exception:
         return ["Tokyo Tower", "Month Fuji", "Shibuya", "Ubud", "Kuta Beach", "Pandawa beach", "Sydney", "Melbourne", "Queensland"]
+
 @app.get("/api/v1/transportations")
 def get_transportation():
     return ["Bus", "Train", "Flight"]
+# Challenge session 4
+@app.get("/api/v1/trips")
+def list_trips():
+    db = SessionLocal()
+    trips = db.query(Trip).all()
+    db.close()
+    return trips 
+
+@app.get("/api/v1/trips/{trip_id}")
+def get_trip(trip_id: int):
+    db = SessionLocal()
+    trip = db.query(Trip).filter(Trip.id == trip_id).first()
+    db.close()
+
+    if trip is None:
+        raise HTTPException(status_code=404, detail=f"Trip with id {trip_id} not found")
+        
+    return trip
+
+@app.delete("/api/v1/trips/{trip_id}")
+def delete_trip(trip_id: int):
+    db = SessionLocal()
+    trip = db.query(Trip).filter(Trip.id == trip_id).first()
+
+    if trip is None:
+        db.close()
+        raise HTTPException(status_code=404, detail=f"Trip with id {trip_id} not found")
+
+    try:
+        db.delete(trip)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        db.close()
+        raise HTTPException(status_code=500, detail=f"Failed to delete trip: {str(e)}")
+
+    db.close()
+    return {"message": f"Trip with id {trip_id} successfully deleted"}
+
+@app.put("/api/v1/trips/{trip_id}")
+def update_trip(trip_id: int, request: TripUpdate):
+    db = SessionLocal()
+    trip = db.query(Trip).filter(Trip.id == trip_id).first()
+
+    if trip is None:
+        db.close()
+        raise HTTPException(status_code=404, detail=f"Trip with id {trip_id} not found")
+
+    trip.budget = request.budget
+
+    try:
+        trip.daily_budget = calculate_daily_budget(request.budget, trip.days)
+    except Exception:
+        trip.daily_budget = request.budget / trip.days if trip.days > 0 else 0.0
+
+    try:
+        trip.category = get_trip_category(request.budget)
+    except Exception:
+        trip.category = "Standard"
+
+    try:
+        db.commit()
+        db.refresh(trip)
+    except Exception as e:
+        db.rollback()
+        db.close()
+        raise HTTPException(status_code=500, detail=f"Failed to update trip: {str(e)}")
+
+    db.close()
+    return trip
