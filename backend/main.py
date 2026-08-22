@@ -297,6 +297,55 @@ def generate_itinerary(request: TripRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate itinerary: {str(e)}")
 
+@app.post("/api/v1/trips/{trip_id}/generate")
+def generate_and_save_itinerary(trip_id: int):
+    """
+    Generate a rich AI itinerary for an existing trip and save it to the database.
+
+    Uses the improved prompt with structured daily plans:
+    - **Morning:** 3 specific activities with costs and durations
+    - **Afternoon:** cultural sites + authentic local experiences
+    - **Evening:** named dinner spots + nightlife recommendations
+
+    - **trip_id**: ID of the existing trip
+    """
+    db = SessionLocal()
+    try:
+        # Fetch the existing trip
+        trip = db.query(Trip).filter(Trip.id == trip_id).first()
+        if trip is None:
+            raise HTTPException(status_code=404, detail=f"Trip with id {trip_id} not found")
+
+        # Generate enriched AI recommendation using the richer prompt
+        ai_recommendation = bedrock_service.plan_trip_itinerary(
+            destination=trip.destination,
+            days=trip.days,
+            budget=trip.budget,
+            travel_style=trip.category
+        )
+
+        # Persist the result into the ai_recommendation column
+        trip.ai_recommendation = ai_recommendation
+        db.commit()
+        db.refresh(trip)
+
+        return {
+            "id": trip.id,
+            "destination": trip.destination,
+            "days": trip.days,
+            "budget": trip.budget,
+            "category": trip.category,
+            "daily_budget": trip.daily_budget,
+            "ai_recommendation": trip.ai_recommendation
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to generate itinerary: {str(e)}")
+    finally:
+        db.close()
+
 @app.get("/api/v1/trips/{trip_id}/itinerary-html", response_class=HTMLResponse)
 def get_trip_itinerary_html(trip_id: int):
     """
