@@ -1,47 +1,38 @@
 'use client';
-
 import React, { useState } from 'react';
 import Image from "next/image";
-
 const SparklesIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
   </svg>
 );
-
 const MapPinIcon = () => (
   <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
   </svg>
 );
-
 const WalletIcon = () => (
   <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
   </svg>
 );
-
 const CalendarIcon = () => (
   <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
   </svg>
 );
-
 const CompassIcon = () => (
   <svg className="w-5 h-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 4a1 1 0 012 0v1a1 1 0 01-2 0V4zm0 14a1 1 0 012 0v1a1 1 0 01-2 0v-1zM4 11a1 1 0 010-2h1a1 1 0 010 2H4zm14 0a1 1 0 010-2h1a1 1 0 010 2h-1zM8.05 8.05a1 1 0 011.414 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zm7.778 7.778a1 1 0 011.414 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zM8.05 15.95a1 1 0 010 1.414l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 0zm7.778-7.778a1 1 0 010 1.414l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 0z" />
   </svg>
 );
-
 const CheckCircleIcon = () => (
   <svg className="w-5 h-5 text-emerald-500 inline mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 );
-
 const QUICK_DESTINATIONS = ['Japan 🇯🇵', 'Bali 🏝️', 'Australia 🇦🇺'];
-
 // Spot wisata bawaan sesuai lokasi pilihan
 const DESTINATION_SPOTS: Record<string, string[]> = {
   japan: ["Tokyo Tower", "Shibuya", "Mount Fuji"],
@@ -49,7 +40,6 @@ const DESTINATION_SPOTS: Record<string, string[]> = {
   bali: ["Ubud", "Kuta Beach", "Pandawa Beach"],
   australia: ["Sydney", "Melbourne", "Queensland"],
 };
-
 const TRAVEL_STYLES = [
   { id: 'family', name: 'Keluarga', icon: '👨‍👩‍👧‍👦', desc: 'Nyaman & santai' },
   { id: 'backpacker', name: 'Hemat / Backpacker', icon: '🎒', desc: 'Efisien & terjangkau' },
@@ -58,7 +48,6 @@ const TRAVEL_STYLES = [
   { id: 'romantic', name: 'Pasangan', icon: '👩‍❤️‍👨', desc: 'Romantis & intim' },
   { id: 'culinary', name: 'Kuliner', icon: '🍜', desc: 'Eksplor makanan lokal' },
 ];
-
 export default function Home() {
   const [destination, setDestination] = useState('');
   const [budget, setBudget] = useState('2000');
@@ -68,7 +57,6 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
   const [generatedResult, setGeneratedResult] = useState<any>(null);
-
   React.useEffect(() => {
     try {
       const saved = localStorage.getItem('kelana_ai_trip');
@@ -79,7 +67,6 @@ export default function Home() {
       console.error('Gagal membaca dari localStorage:', e);
     }
   }, []);
-
   // Helper untuk menyimpan hasil ke state & localStorage
   const saveResult = (result: any) => {
     setGeneratedResult(result);
@@ -89,23 +76,18 @@ export default function Home() {
       console.error('Gagal menyimpan ke localStorage:', e);
     }
   };
-
   const handleClearResult = () => {
     setGeneratedResult(null);
     localStorage.removeItem('kelana_ai_trip');
   };
-
   const formatUSD = (val: string) => {
     const num = parseInt(val.replace(/\D/g, ''), 10);
     if (isNaN(num)) return '';
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
   };
-
   const parseAiText = (text: string) => {
     if (!text) return { highlights: [], itinerary: [], rawMarkdown: '' };
-
     const trimmed = text.trim();
-
     // 1. Coba parse HANYA jika string diawali karakter JSON valid ('{' atau '[')
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
       try {
@@ -121,7 +103,6 @@ export default function Home() {
         // Abaikan jika ternyata bukan JSON valid
       }
     }
-
     // 2. Parse format Teks Markdown jika dari AWS Bedrock
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
     const highlights: string[] = [];
@@ -129,7 +110,6 @@ export default function Home() {
     let currentDay: { day: number; title: string; activities: string[] } | null = null;
     let inOverview = false;
     let inTips = false;
-
     for (const line of lines) {
       if (line.includes('Trip Overview')) {
         inOverview = true;
@@ -147,15 +127,12 @@ export default function Home() {
         }
         continue;
       }
-
       // Lewati baris metadata overview agar tidak masuk ke sorotan/highlights
       if (inOverview && (line.includes('Destination:') || line.includes('Duration:') || line.includes('Budget:') || line.includes('Travel Style:'))) {
         continue;
       }
-
       // Deteksi header hari (misal: "## Day 1", "Hari 1", "**Day 1**")
       const dayMatch = line.match(/^(?:#+\s*|\*\*|)(?:🌅\s*)?(Day|Hari)\s*(\d+)\s*[:\-\|]?\s*(.*?)(?:\*\*|)$/i);
-
       if (dayMatch) {
         if (currentDay) itinerary.push(currentDay);
         const dayNum = parseInt(dayMatch[2], 10);
@@ -169,7 +146,6 @@ export default function Home() {
         inTips = false;
         continue;
       }
-
       // Deteksi poin aktivitas / bullet point
       if (line.startsWith('-') || line.startsWith('*') || line.match(/^\d+\./)) {
         const cleanLine = line.replace(/^[\-\*\d\.]+\s*/, '').replace(/\*\*/g, '').trim();
@@ -183,9 +159,7 @@ export default function Home() {
         if (cleanLine && !cleanLine.includes('Destination') && !cleanLine.includes('Budget')) highlights.push(cleanLine);
       }
     }
-
     if (currentDay) itinerary.push(currentDay);
-
     return {
       highlights: highlights.length ? highlights : [
         'Eksplorasi destinasi pilihan dengan rute optimal',
@@ -195,18 +169,14 @@ export default function Home() {
       rawMarkdown: text
     };
   };
-
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!destination.trim()) return;
-
     setIsGenerating(true);
     setGeneratedResult(null);
-
     setLoadingStep('Mengirim data ke server backend Python (:8000)...');
     
     const parsedBudget = parseFloat(budget) || 2000;
-
     try {
       // Panggil REST API backend Python (FastAPI + SQLAlchemy)
       const res = await fetch('http://localhost:8000/api/v1/trips', {
@@ -219,17 +189,14 @@ export default function Home() {
           travel_style: travelStyle,
         })
       });
-
       if (!res.ok) {
         throw new Error(`Server backend merespons error status: ${res.status}`);
       }
-
       setLoadingStep('Memproses rekomendasi AI dari database...');
       const data = await res.json();
       
       // Mengurai rekomendasi tanpa memicu SyntaxError JSON parse
       const parsedAi = parseAiText(data.ai_recommendation || '');
-
       setIsGenerating(false);
       const newResult = {
         id: data.id,
@@ -247,12 +214,10 @@ export default function Home() {
     } catch (error) {
       console.log('Backend offline / error, menjalankan simulasi fallback di frontend...', error);
     }
-
     // Fallback jika server backend belum dinyalakan atau error
     setLoadingStep('Menganalisis karakteristik destinasi...');
     setTimeout(() => setLoadingStep('Menghitung estimasi biaya & akomodasi...'), 1000);
     setTimeout(() => setLoadingStep('Menyusun itinerary harian yang optimal...'), 2000);
-
     setTimeout(() => {
       setIsGenerating(false);
       
@@ -262,7 +227,6 @@ export default function Home() {
         `Spot foto populer & pusat kota`,
         `Kawasan wisata favorit`
       ];
-
       const fallbackResult = {
         destination,
         days,
@@ -289,11 +253,9 @@ export default function Home() {
           };
         })
       };
-
       saveResult(fallbackResult);
     }, 3200);
   };
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.25),rgba(255,255,255,0))] relative">
       
@@ -305,7 +267,6 @@ export default function Home() {
             {/* Ambient Background Glow Effect */}
             <div className="absolute -top-24 -left-24 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl animate-pulse"></div>
             <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-purple-500/20 rounded-full blur-3xl animate-pulse delay-700"></div>
-
             {/* Travel & AI Animated Badge */}
             <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
               <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-500 to-purple-600 animate-spin opacity-80 blur-sm"></div>
@@ -313,7 +274,6 @@ export default function Home() {
                 ✈️
               </div>
             </div>
-
             {/* Title & Tagline Branding */}
             <div className="space-y-2 relative z-10">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-semibold uppercase tracking-wider">
@@ -326,7 +286,6 @@ export default function Home() {
                 TRAVELING ASIK PAKE AI
               </p>
             </div>
-
             {/* Loading Indicator & Status Bar */}
             <div className="space-y-3 pt-2 relative z-10">
               <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
@@ -336,14 +295,12 @@ export default function Home() {
                 {loadingStep || 'Sedang menyusun petualangan impianmu...'}
               </p>
             </div>
-
             <div className="text-[11px] text-slate-500 italic pt-2 border-t border-slate-800/80">
               Menghubungkan ke server backend FastAPI & AI Bedrock...
             </div>
           </div>
         </div>
       )}
-
       {/* Header Bar */}
       <header className="border-b border-slate-800/80 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -361,6 +318,27 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Hero Banner collage containing iconic landmarks */}
+      <div className="w-full h-48 sm:h-72 md:h-[360px] relative overflow-hidden flex select-none pointer-events-none z-0">
+        <img
+          src="https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80"
+          alt="Landmark Jepang"
+          className="w-1/3 h-full object-cover border-r border-slate-900/50"
+        />
+        <img
+          src="https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=800&q=80"
+          alt="Landmark Bali"
+          className="w-1/3 h-full object-cover border-r border-slate-900/50"
+        />
+        <img
+          src="https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?auto=format&fit=crop&w=800&q=80"
+          alt="Landmark Australia"
+          className="w-1/3 h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent pointer-events-none"></div>
+        <div className="absolute inset-0 bg-slate-900/20 mix-blend-multiply pointer-events-none"></div>
+      </div>
+
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-4 py-10 space-y-10">
         <div className="text-center space-y-3 max-w-2xl mx-auto">
@@ -374,7 +352,6 @@ export default function Home() {
             Atur anggaran, durasi, dan gaya liburanmu. Biarkan kecerdasan buatan menyusun jadwal perjalanan terbaik secara personal.
           </p>
         </div>
-
         {/* Input Form Card */}
         <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-xl p-6 sm:p-8">
           <form onSubmit={handleGenerate} className="space-y-6">
@@ -405,7 +382,6 @@ export default function Home() {
                 ))}
               </div>
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {/* Budget Input */}
               <div className="space-y-2">
@@ -426,7 +402,6 @@ export default function Home() {
                   Estimasi: {formatUSD(budget) || '$0'}
                 </p>
               </div>
-
               {/* Days Counter */}
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
@@ -454,7 +429,6 @@ export default function Home() {
                 </div>
               </div>
             </div>
-
             {/* Travel Style Selection */}
             <div className="space-y-3">
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
@@ -487,7 +461,6 @@ export default function Home() {
                 ))}
               </div>
             </div>
-
             {/* Submit Button */}
             <button
               type="submit"
@@ -511,7 +484,6 @@ export default function Home() {
             </button>
           </form>
         </div>
-
         {/* AI Result Cards */}
         {generatedResult && (
           <div className="bg-slate-900 border border-indigo-500/30 rounded-2xl p-6 sm:p-8 space-y-6 shadow-2xl">
@@ -542,7 +514,6 @@ export default function Home() {
                 </button>
               </div>
             </div>
-
             <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-4">
               <h4 className="text-sm font-semibold text-indigo-300 mb-2">💡 Sorotan Rencana Ini:</h4>
               <ul className="space-y-1.5 text-xs sm:text-sm text-slate-300">
@@ -553,7 +524,6 @@ export default function Home() {
                 ))}
               </ul>
             </div>
-
             <div className="space-y-4">
               <h3 className="text-base sm:text-lg font-bold text-white">Jadwal Harian:</h3>
               
