@@ -1,6 +1,7 @@
 'use client';
-import React, { useState } from 'react';
-import Image from "next/image";
+import React, { useState, useMemo } from 'react';
+import Link from 'next/link';
+
 const SparklesIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
@@ -32,14 +33,15 @@ const CheckCircleIcon = () => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 );
-const QUICK_DESTINATIONS = ['Japan 🇯🇵', 'Bali 🏝️', 'Australia 🇦🇺'];
-// Spot wisata bawaan sesuai lokasi pilihan
+
+const QUICK_DESTINATIONS = ['Japan 🏯', 'Bali 🏝️', 'Australia 🐨'];
 const DESTINATION_SPOTS: Record<string, string[]> = {
-  japan: ["Tokyo Tower", "Shibuya", "Mount Fuji"],
-  jepang: ["Tokyo Tower", "Shibuya", "Mount Fuji"],
-  bali: ["Ubud", "Kuta Beach", "Pandawa Beach"],
-  australia: ["Sydney", "Melbourne", "Queensland"],
+  japan: ["Tokyo Tower", "Shibuya Crossing", "Mount Fuji", "Kyoto Arashiyama", "Osaka Dotonbori", "Nara Park", "Akihabara"],
+  jepang: ["Tokyo Tower", "Shibuya Crossing", "Mount Fuji", "Kyoto Arashiyama", "Osaka Dotonbori", "Nara Park", "Akihabara"],
+  bali: ["Ubud Monkey Forest", "Kuta Beach", "Pandawa Beach", "Tanah Lot", "Nusa Penida", "Seminyak", "Ulun Danu Beratan"],
+  australia: ["Sydney Opera House", "Melbourne Laneways", "Great Barrier Reef", "Bondi Beach", "Blue Mountains", "Gold Coast"],
 };
+
 const TRAVEL_STYLES = [
   { id: 'family', name: 'Keluarga', icon: '👨‍👩‍👧‍👦', desc: 'Nyaman & santai' },
   { id: 'backpacker', name: 'Hemat / Backpacker', icon: '🎒', desc: 'Efisien & terjangkau' },
@@ -48,15 +50,18 @@ const TRAVEL_STYLES = [
   { id: 'romantic', name: 'Pasangan', icon: '👩‍❤️‍👨', desc: 'Romantis & intim' },
   { id: 'culinary', name: 'Kuliner', icon: '🍜', desc: 'Eksplor makanan lokal' },
 ];
+
 export default function Home() {
   const [destination, setDestination] = useState('');
   const [budget, setBudget] = useState('2000');
   const [days, setDays] = useState(3);
   const [travelStyle, setTravelStyle] = useState('family');
+  const [styleSearchQuery, setStyleSearchQuery] = useState('');
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
   const [generatedResult, setGeneratedResult] = useState<any>(null);
+
   React.useEffect(() => {
     try {
       const saved = localStorage.getItem('kelana_ai_trip');
@@ -67,7 +72,7 @@ export default function Home() {
       console.error('Gagal membaca dari localStorage:', e);
     }
   }, []);
-  // Helper untuk menyimpan hasil ke state & localStorage
+
   const saveResult = (result: any) => {
     setGeneratedResult(result);
     try {
@@ -76,19 +81,43 @@ export default function Home() {
       console.error('Gagal menyimpan ke localStorage:', e);
     }
   };
+
   const handleClearResult = () => {
     setGeneratedResult(null);
     localStorage.removeItem('kelana_ai_trip');
   };
+
+  const handleResetForm = () => {
+    setDestination('');
+    setBudget('2000');
+    setDays(3);
+    setTravelStyle('family');
+    setStyleSearchQuery('');
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const filteredTravelStyles = useMemo(() => {
+    if (!styleSearchQuery.trim()) return TRAVEL_STYLES;
+    const query = styleSearchQuery.toLowerCase();
+    return TRAVEL_STYLES.filter(
+      (style) =>
+        style.name.toLowerCase().includes(query) ||
+        style.desc.toLowerCase().includes(query)
+    );
+  }, [styleSearchQuery]);
+
   const formatUSD = (val: string) => {
-    const num = parseInt(val.replace(/\D/g, ''), 10);
+    const num = parseInt(val.toString().replace(/\D/g, ''), 10);
     if (isNaN(num)) return '';
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
   };
+
   const parseAiText = (text: string) => {
     if (!text) return { highlights: [], itinerary: [], rawMarkdown: '' };
     const trimmed = text.trim();
-    // 1. Coba parse HANYA jika string diawali karakter JSON valid ('{' atau '[')
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
       try {
         const parsed = JSON.parse(trimmed);
@@ -99,17 +128,16 @@ export default function Home() {
             rawMarkdown: ''
           };
         }
-      } catch (e) {
-        // Abaikan jika ternyata bukan JSON valid
-      }
+      } catch (e) {}
     }
-    // 2. Parse format Teks Markdown jika dari AWS Bedrock
+
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
     const highlights: string[] = [];
     const itinerary: { day: number; title: string; activities: string[] }[] = [];
     let currentDay: { day: number; title: string; activities: string[] } | null = null;
     let inOverview = false;
     let inTips = false;
+
     for (const line of lines) {
       if (line.includes('Trip Overview')) {
         inOverview = true;
@@ -127,11 +155,10 @@ export default function Home() {
         }
         continue;
       }
-      // Lewati baris metadata overview agar tidak masuk ke sorotan/highlights
       if (inOverview && (line.includes('Destination:') || line.includes('Duration:') || line.includes('Budget:') || line.includes('Travel Style:'))) {
         continue;
       }
-      // Deteksi header hari (misal: "## Day 1", "Hari 1", "**Day 1**")
+
       const dayMatch = line.match(/^(?:#+\s*|\*\*|)(?:🌅\s*)?(Day|Hari)\s*(\d+)\s*[:\-\|]?\s*(.*?)(?:\*\*|)$/i);
       if (dayMatch) {
         if (currentDay) itinerary.push(currentDay);
@@ -146,7 +173,7 @@ export default function Home() {
         inTips = false;
         continue;
       }
-      // Deteksi poin aktivitas / bullet point
+
       if (line.startsWith('-') || line.startsWith('*') || line.match(/^\d+\./)) {
         const cleanLine = line.replace(/^[\-\*\d\.]+\s*/, '').replace(/\*\*/g, '').trim();
         if (currentDay) {
@@ -169,6 +196,61 @@ export default function Home() {
       rawMarkdown: text
     };
   };
+
+  // Helper untuk aktivitas spesifik sesuai Travel Style & Hari
+  const getStyleActivities = (style: string, dest: string, dayNum: number, spotName: string, dailyBudStr: string) => {
+    switch (style) {
+      case 'luxury':
+        return [
+          `08:30 - Sarapan buffet eksklusif & Penjemputan Private Car (Estimasi harian ~${dailyBudStr})`,
+          `10:30 - Kunjungan VIP & tur privat berpemandu di ${spotName}`,
+          `13:00 - Makan siang Fine Dining kuliner berbintang khas ${dest}`,
+          `16:00 - Sesi relaksasi Spa / Lounge pemandangan premium`,
+          `19:30 - Candlelight Dinner romantis & pengalaman malam eksklusif`,
+        ];
+      case 'backpacker':
+        return [
+          `08:00 - Sarapan hemat lokal & berangkat naik transportasi umum`,
+          `09:30 - Eksplorasi spot foto populer & jalan santai di ${spotName}`,
+          `12:30 - Makan siang street food / kedai lokal favorit warga setempat`,
+          `15:00 - Tur budaya mandiri & eksplorasi kawasan bersejarah ${dest}`,
+          `18:30 - Berburu kuliner malam terjangkau di Night Market`,
+        ];
+      case 'culinary':
+        return [
+          `08:30 - Wisata kuliner sarapan legendaris khas ${dest}`,
+          `10:30 - Mengunjungi pasar tradisional & cooking class masakan lokal`,
+          `13:00 - Santap siang hidangan paling ikonik di ${spotName}`,
+          `16:00 - Tasting dessert, kafe estetik & camilan manis khas setempat`,
+          `19:00 - Wisata kuliner malam & eksplorasi rekomendasi resto terbaik`,
+        ];
+      case 'romantic':
+        return [
+          `09:00 - Sarapan santai dengan pemandangan indah bersama pasangan`,
+          `11:00 - Jalan-jalan romantis & momen berfoto di ${spotName}`,
+          `13:30 - Makan siang di kafe berkonsep intim & estetik`,
+          `16:30 - Menikmati sunset di spot pemandangan terbaik ${dest}`,
+          `19:30 - Dinner romantis spesial & menikmati suasana malam`,
+        ];
+      case 'solo':
+        return [
+          `08:00 - Morning walk & eksplor hidden gem di sekitar ${dest}`,
+          `10:00 - Mengunjungi galeri/museum & tur mandiri di ${spotName}`,
+          `12:30 - Makan siang santai di kafe lokal`,
+          `15:00 - Photography walk & sosialisasi dengan warga lokal`,
+          `18:30 - Santai malam di tempat musik lokal & eksplorasi bebas`,
+        ];
+      default: // family
+        return [
+          `08:30 - Penjemputan keluarga & sarapan ramah anak/semua usia`,
+          `10:00 - Kunjungan ke wahana/area wisata keluarga di ${spotName}`,
+          `13:00 - Makan siang bersama di restoran keluarga yang nyaman`,
+          `15:30 - Aktivitas santai & berburu suvenir khas ${dest}`,
+          `18:30 - Makan malam keluarga & kembali istirahat di hotel`,
+        ];
+    }
+  };
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!destination.trim()) return;
@@ -177,8 +259,10 @@ export default function Home() {
     setLoadingStep('Mengirim data ke server backend Python (:8000)...');
     
     const parsedBudget = parseFloat(budget) || 2000;
+    const selectedStyleObj = TRAVEL_STYLES.find(s => s.id === travelStyle);
+    const styleLabel = selectedStyleObj ? selectedStyleObj.name : travelStyle;
+
     try {
-      // Panggil REST API backend Python (FastAPI + SQLAlchemy)
       const res = await fetch('http://localhost:8000/api/v1/trips', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -189,73 +273,79 @@ export default function Home() {
           travel_style: travelStyle,
         })
       });
-      if (!res.ok) {
-        throw new Error(`Server backend merespons error status: ${res.status}`);
+
+      if (res.ok) {
+        setLoadingStep('Memproses rekomendasi AI dari database...');
+        const data = await res.json();
+        const parsedAi = parseAiText(data.ai_recommendation || '');
+        setIsGenerating(false);
+
+        const newResult = {
+          id: data.id,
+          destination: data.destination,
+          days: data.days,
+          budget: formatUSD(data.budget.toString()),
+          dailyBudget: formatUSD((data.budget / data.days).toFixed(0)),
+          style: styleLabel,
+          highlights: parsedAi.highlights.length ? parsedAi.highlights : [
+            `Pengalaman perjalanan ${styleLabel} selama ${data.days} hari`,
+            `Alokasi total budget ${formatUSD(data.budget.toString())} (${formatUSD((data.budget / data.days).toFixed(0))}/hari)`
+          ],
+          itinerary: parsedAi.itinerary,
+          rawMarkdown: parsedAi.rawMarkdown
+        };
+        saveResult(newResult);
+        return;
       }
-      setLoadingStep('Memproses rekomendasi AI dari database...');
-      const data = await res.json();
-      
-      // Mengurai rekomendasi tanpa memicu SyntaxError JSON parse
-      const parsedAi = parseAiText(data.ai_recommendation || '');
-      setIsGenerating(false);
-      const newResult = {
-        id: data.id,
-        destination: data.destination,
-        days: data.days,
-        budget: formatUSD(data.budget.toString()),
-        dailyBudget: formatUSD(data.daily_budget.toString()),
-        style: TRAVEL_STYLES.find(s => s.id === data.category)?.name || data.category,
-        highlights: parsedAi.highlights,
-        itinerary: parsedAi.itinerary,
-        rawMarkdown: parsedAi.rawMarkdown
-      };
-      saveResult(newResult);
-      return;
     } catch (error) {
-      console.log('Backend offline / error, menjalankan simulasi fallback di frontend...', error);
+      console.log('Backend offline / error 500, menjalankan simulasi fallback presisi...', error);
     }
-    // Fallback jika server backend belum dinyalakan atau error
-    setLoadingStep('Menganalisis karakteristik destinasi...');
-    setTimeout(() => setLoadingStep('Menghitung estimasi biaya & akomodasi...'), 1000);
-    setTimeout(() => setLoadingStep('Menyusun itinerary harian yang optimal...'), 2000);
+
+    // SIMULASI FALLBACK PRESISI sesuai input user jika backend 500
+    setLoadingStep('Menganalisis karakteristik destinasi & gaya perjalanan...');
+    setTimeout(() => setLoadingStep('Menghitung alokasi budget harian efisien...'), 1000);
+    setTimeout(() => setLoadingStep(`Menyusun ${days} hari itinerary presisi...`), 2000);
     setTimeout(() => {
       setIsGenerating(false);
       
       const destLower = destination.trim().toLowerCase();
       const matchedSpots = DESTINATION_SPOTS[destLower] || [
-        `Destinasi utama di ${destination}`,
-        `Spot foto populer & pusat kota`,
-        `Kawasan wisata favorit`
+        `Pusat Kota & Landmark Ikonik ${destination}`,
+        `Kawasan Wisata & Spot Foto Populer`,
+        `Kawasan Kuliner Khas ${destination}`,
+        `Taman & Area Rekreasi Terkenal`,
+        `Pusat Seni & Kebudayaan Lokal`,
       ];
+
+      const dailyBudVal = formatUSD((parsedBudget / days).toFixed(0));
+      const budgetTotalStr = formatUSD(budget);
+
       const fallbackResult = {
         destination,
-        days,
-        budget: formatUSD(budget),
-        dailyBudget: formatUSD((parsedBudget / days).toFixed(0)),
-        style: TRAVEL_STYLES.find(s => s.id === travelStyle)?.name || travelStyle,
+        days: days,
+        budget: budgetTotalStr,
+        dailyBudget: dailyBudVal,
+        style: styleLabel,
         highlights: [
-          `Mengunjungi spot ikonik: ${matchedSpots.join(', ')}`,
-          `Rekomendasi akomodasi efisien untuk ${days} hari`,
-          `Rute perjalanan harian yang efektif & hemat waktu`,
+          `Rute ${days} hari ${styleLabel} yang dirancang khusus untuk destinasi ${destination}`,
+          `Total Anggaran: ${budgetTotalStr} dengan rata-rata estimasi ${dailyBudVal} per hari`,
+          `Rekomendasi spot ikonik: ${matchedSpots.slice(0, 3).join(', ')}`,
+          `Rangkaian aktivitas yang fleksibel & dioptimalkan sesuai preferensi ${styleLabel}`,
         ],
-        itinerary: Array.from({ length: Math.min(days, 5) }, (_, i) => {
+        // Menghasilkan itinerary persis sebanyak N (days) hari yang diinputkan
+        itinerary: Array.from({ length: days }, (_, i) => {
           const spotName = matchedSpots[i % matchedSpots.length];
           return {
             day: i + 1,
             title: `Hari ke-${i + 1}: Eksplorasi ${spotName}`,
-            activities: [
-              `08:00 - Penjemputan / Sarapan lokal di ${destination}`,
-              `10:00 - Kunjungan utama & aktivitas di ${spotName}`,
-              `13:00 - Makan siang kuliner lokal khas setempat`,
-              `16:00 - Santai & eksplorasi area sekitar ${spotName}`,
-              `19:00 - Makan malam & berburu suvenir`,
-            ]
+            activities: getStyleActivities(travelStyle, destination, i + 1, spotName, dailyBudVal)
           };
         })
       };
       saveResult(fallbackResult);
     }, 3200);
   };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.25),rgba(255,255,255,0))] relative">
       
@@ -263,18 +353,14 @@ export default function Home() {
       {isGenerating && (
         <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-4 transition-all duration-300">
           <div className="relative max-w-lg w-full bg-slate-900/90 border border-indigo-500/30 rounded-3xl p-8 text-center shadow-2xl shadow-indigo-500/20 space-y-6 overflow-hidden">
-            
-            {/* Ambient Background Glow Effect */}
             <div className="absolute -top-24 -left-24 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl animate-pulse"></div>
             <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-purple-500/20 rounded-full blur-3xl animate-pulse delay-700"></div>
-            {/* Travel & AI Animated Badge */}
             <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
               <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-500 to-purple-600 animate-spin opacity-80 blur-sm"></div>
               <div className="relative w-20 h-20 rounded-full bg-slate-950 flex items-center justify-center text-4xl shadow-inner border border-indigo-400/30">
                 ✈️
               </div>
             </div>
-            {/* Title & Tagline Branding */}
             <div className="space-y-2 relative z-10">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-semibold uppercase tracking-wider">
                 <SparklesIcon /> AI Trip Engine Active
@@ -286,7 +372,6 @@ export default function Home() {
                 TRAVELING ASIK PAKE AI
               </p>
             </div>
-            {/* Loading Indicator & Status Bar */}
             <div className="space-y-3 pt-2 relative z-10">
               <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
                 <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 h-full w-full animate-pulse rounded-full"></div>
@@ -301,6 +386,7 @@ export default function Home() {
           </div>
         </div>
       )}
+
       {/* Header Bar */}
       <header className="border-b border-slate-800/80 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -312,13 +398,21 @@ export default function Home() {
               KelanaAI
             </span>
           </div>
-          <span className="text-xs font-medium px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-            v2.0 Beta
-          </span>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/trips"
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5"
+            >
+              📜 History Trips
+            </Link>
+            <span className="text-xs font-medium px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              v2.0 Beta
+            </span>
+          </div>
         </div>
       </header>
 
-      {/* Hero Banner collage containing iconic landmarks */}
+      {/* Hero Banner */}
       <div className="w-full h-48 sm:h-72 md:h-[360px] relative overflow-hidden flex select-none pointer-events-none z-0">
         <img
           src="https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80"
@@ -352,19 +446,34 @@ export default function Home() {
             Atur anggaran, durasi, dan gaya liburanmu. Biarkan kecerdasan buatan menyusun jadwal perjalanan terbaik secara personal.
           </p>
         </div>
-        {/* Input Form Card */}
+
+        {/* Form Input Card */}
         <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-xl p-6 sm:p-8">
+          <div className="flex justify-between items-center mb-6 pb-2 border-b border-slate-800">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              ✏️ Isi Form Perjalanan
+            </h2>
+            <button
+              type="button"
+              onClick={handleResetForm}
+              className="text-xs px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-1 cursor-pointer"
+            >
+              🔄 Reset Form
+            </button>
+          </div>
+
           <form onSubmit={handleGenerate} className="space-y-6">
+            {/* Input Destinasi (Text Search) */}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
                 <MapPinIcon />
-                <span>DESTINASI TUJUAN</span>
+                <span>DESTINASI TUJUAN (Pencarian Teks)</span>
               </label>
               <input
                 type="text"
                 value={destination}
                 onChange={(e) => setDestination(e.target.value)}
-                placeholder="Misal: Jepang, Bali, Yogyakarta, Swiss..."
+                placeholder="Cari atau ketik destinasi: Jepang, Bali, Yogyakarta, Swiss..."
                 className="w-full px-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-white placeholder-slate-500 text-base"
                 required
               />
@@ -375,13 +484,14 @@ export default function Home() {
                     key={dest}
                     type="button"
                     onClick={() => setDestination(dest.split(' ')[0])}
-                    className="text-xs px-2.5 py-1 rounded-lg bg-slate-800/60 hover:bg-slate-800 text-slate-300 border border-slate-700/50 transition"
+                    className="text-xs px-2.5 py-1 rounded-lg bg-slate-800/60 hover:bg-slate-800 text-slate-300 border border-slate-700/50 transition cursor-pointer"
                   >
                     {dest}
                   </button>
                 ))}
               </div>
             </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {/* Budget Input */}
               <div className="space-y-2">
@@ -402,6 +512,7 @@ export default function Home() {
                   Estimasi: {formatUSD(budget) || '$0'}
                 </p>
               </div>
+
               {/* Days Counter */}
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
@@ -412,7 +523,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setDays(Math.max(1, days - 1))}
-                    className="w-12 h-12 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xl font-bold flex items-center justify-center transition border border-slate-700"
+                    className="w-12 h-12 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xl font-bold flex items-center justify-center transition border border-slate-700 cursor-pointer"
                   >
                     -
                   </button>
@@ -422,133 +533,142 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setDays(days + 1)}
-                    className="w-12 h-12 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xl font-bold flex items-center justify-center transition border border-slate-700"
+                    className="w-12 h-12 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xl font-bold flex items-center justify-center transition border border-slate-700 cursor-pointer"
                   >
                     +
                   </button>
                 </div>
               </div>
             </div>
-            {/* Travel Style Selection */}
+
+            {/* Travel Style (Pencarian & Pemilihan Gaya) */}
             <div className="space-y-3">
-              <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
-                <CompassIcon />
-                <span>GAYA PERJALANAN</span>
-              </label>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                  <CompassIcon />
+                  <span>GAYA PERJALANAN (Travel Style)</span>
+                </label>
+                {/* Search bar untuk Travel Style */}
+                <input
+                  type="text"
+                  value={styleSearchQuery}
+                  onChange={(e) => setStyleSearchQuery(e.target.value)}
+                  placeholder="🔍 Cari gaya (misal: Mewah, Backpacker)..."
+                  className="px-3 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white placeholder-slate-500 focus:ring-1 focus:ring-indigo-500 outline-none w-full sm:w-64"
+                />
+              </div>
+
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {TRAVEL_STYLES.map((style) => (
-                  <button
-                    key={style.id}
-                    type="button"
-                    onClick={() => setTravelStyle(style.id)}
-                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between gap-2 ${
-                      travelStyle === style.id
-                        ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-lg shadow-indigo-500/10'
-                        : 'bg-slate-950/40 border-slate-800 hover:border-slate-700 text-slate-400'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
+                {filteredTravelStyles.length > 0 ? (
+                  filteredTravelStyles.map((style) => (
+                    <button
+                      key={style.id}
+                      type="button"
+                      onClick={() => setTravelStyle(style.id)}
+                      className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between gap-2 cursor-pointer ${
+                        travelStyle === style.id ? 'bg-indigo-600 border-indigo-500' : 'bg-slate-800/50 border-slate-700 hover:border-slate-600'
+                      }`}
+                    >
                       <span className="text-2xl">{style.icon}</span>
-                      {travelStyle === style.id && (
-                        <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-200">{style.name}</p>
-                      <p className="text-xs text-slate-400 font-normal">{style.desc}</p>
-                    </div>
-                  </button>
-                ))}
+                      <div>
+                        <h4 className="text-sm font-bold text-white">{style.name}</h4>
+                        <p className="text-xs text-slate-400">{style.desc}</p>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="col-span-2 sm:col-span-3 text-center py-4 text-xs text-slate-400 bg-slate-950/50 rounded-xl border border-slate-800">
+                    Gaya liburan "{styleSearchQuery}" tidak ditemukan.
+                  </div>
+                )}
               </div>
             </div>
-            {/* Submit Button */}
+
             <button
               type="submit"
               disabled={isGenerating}
-              className="w-full py-4 px-6 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 text-white font-bold text-base shadow-xl shadow-indigo-500/20 flex items-center justify-center gap-2 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="w-full py-4 bg-gradient-to-r from-blue-600 hover:from-blue-500 to-indigo-600 hover:to-indigo-500 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-500/30 transition disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
             >
-              {isGenerating ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span>{loadingStep || 'Menyusun Rencana AI...'}</span>
-                </>
-              ) : (
-                <>
-                  <SparklesIcon />
-                  <span>Buat Rencana Liburan dengan AI</span>
-                </>
-              )}
+              Generate Itinerary
             </button>
           </form>
         </div>
-        {/* AI Result Cards */}
+
+        {/* Results Section */}
         {generatedResult && (
-          <div className="bg-slate-900 border border-indigo-500/30 rounded-2xl p-6 sm:p-8 space-y-6 shadow-2xl">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-6">
-              <div>
-                <span className="text-xs uppercase tracking-wider text-indigo-400 font-bold">Rencana Perjalanan AI</span>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-white mt-1">
-                  Itinerary {generatedResult.destination}
-                </h2>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-3 py-1 rounded-full bg-slate-800 text-slate-300 text-xs font-medium border border-slate-700">
-                  ⏱️ {generatedResult.days} Hari
-                </span>
-                <span className="px-3 py-1 rounded-full bg-slate-800 text-emerald-400 text-xs font-medium border border-slate-700">
-                  💵 {generatedResult.budget}
-                </span>
-                <span className="px-3 py-1 rounded-full bg-slate-800 text-purple-400 text-xs font-medium border border-slate-700">
-                  ✨ {generatedResult.style}
-                </span>
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6 mt-10">
+            <div className="flex flex-wrap justify-between items-center gap-3 pb-4 border-b border-slate-800">
+              <h3 className="text-2xl font-bold text-white">🎉 Itinerary Anda Sudah Siap!</h3>
+              
+              <div className="flex items-center gap-3">
                 <button
-                  type="button"
+                  onClick={handlePrint}
+                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/20"
+                >
+                  🖨️ Print / Simpan PDF
+                </button>
+                <button 
                   onClick={handleClearResult}
-                  className="px-3 py-1 rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium border border-red-500/20 transition cursor-pointer"
-                  title="Hapus Rencana Tersimpan"
+                  className="px-3.5 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-bold transition cursor-pointer"
                 >
                   🗑️ Hapus
                 </button>
               </div>
             </div>
-            <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-4">
-              <h4 className="text-sm font-semibold text-indigo-300 mb-2">💡 Sorotan Rencana Ini:</h4>
-              <ul className="space-y-1.5 text-xs sm:text-sm text-slate-300">
-                {generatedResult.highlights.map((h: string, idx: number) => (
-                  <li key={idx} className="flex items-center">
-                    <CheckCircleIcon /> {h}
-                  </li>
-                ))}
-              </ul>
+
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                <span className="text-xs text-slate-400 block mb-1">Destinasi</span>
+                <span className="text-lg font-bold text-indigo-400">{generatedResult.destination}</span>
+              </div>
+              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                <span className="text-xs text-slate-400 block mb-1">Total Budget</span>
+                <span className="text-lg font-bold text-emerald-400">{generatedResult.budget}</span>
+              </div>
+              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                <span className="text-xs text-slate-400 block mb-1">Durasi</span>
+                <span className="text-lg font-bold text-amber-400">{generatedResult.days} Hari</span>
+              </div>
+              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                <span className="text-xs text-slate-400 block mb-1">Gaya Perjalanan</span>
+                <span className="text-lg font-bold text-sky-400">{generatedResult.style}</span>
+              </div>
             </div>
-            <div className="space-y-4">
-              <h3 className="text-base sm:text-lg font-bold text-white">Jadwal Harian:</h3>
-              
-              {generatedResult.itinerary && generatedResult.itinerary.length > 0 ? (
-                <div className="grid grid-cols-1 gap-4">
-                  {generatedResult.itinerary.map((item: any) => (
-                    <div key={item.day} className="bg-slate-950/60 border border-slate-800 rounded-xl p-5 space-y-3">
-                      <h4 className="text-sm sm:text-base font-bold text-blue-400">{item.title}</h4>
-                      <ul className="space-y-2">
-                        {item.activities.map((act: string, aIdx: number) => (
-                          <li key={aIdx} className="text-xs sm:text-sm text-slate-300 flex items-start gap-2">
-                            <span className="text-indigo-400 text-xs mt-0.5">●</span>
-                            <span>{act}</span>
+
+            {generatedResult.highlights && generatedResult.highlights.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="font-bold text-white">✨ Sorotan Perjalanan</h4>
+                <ul className="space-y-2">
+                  {generatedResult.highlights.map((highlight: string, idx: number) => (
+                    <li key={idx} className="flex items-start text-sm text-slate-300">
+                      <CheckCircleIcon />
+                      <span>{highlight}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {generatedResult.itinerary && generatedResult.itinerary.length > 0 && (
+              <div className="space-y-4 pt-4 border-t border-slate-800">
+                <h4 className="font-bold text-white text-lg">📅 Jadwal Harian ({generatedResult.days} Hari)</h4>
+                <div className="space-y-4">
+                  {generatedResult.itinerary.map((dayPlan: any, idx: number) => (
+                    <div key={idx} className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/50">
+                      <h5 className="font-bold text-indigo-300 mb-3">{dayPlan.title}</h5>
+                      <ul className="space-y-2 pl-2 border-l-2 border-indigo-500/30">
+                        {dayPlan.activities.map((act: string, actIdx: number) => (
+                          <li key={actIdx} className="text-sm text-slate-300 pl-4 relative">
+                            <span className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-indigo-400"></span>
+                            {act}
                           </li>
                         ))}
                       </ul>
                     </div>
                   ))}
                 </div>
-              ) : generatedResult.rawMarkdown ? (
-                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-5 text-sm text-slate-300 whitespace-pre-line leading-relaxed">
-                  {generatedResult.rawMarkdown}
-                </div>
-              ) : null}
-            </div>
+              </div>
+            )}
           </div>
         )}
       </main>
