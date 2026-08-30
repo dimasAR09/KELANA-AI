@@ -1,48 +1,106 @@
-import { Trip } from '@/types';
+const API_BASE_URL = 'http://localhost:8000/api/v1';
 
-// Pastikan Base URL berhenti di port 8000 ATAU sudah mencakup /api/v1
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-
-export async function getTrips(): Promise<Trip[]> {
-  // Cukup panggil '/trips' (JANGAN panggil '/api/v1/trips' lagi)
-  const response = await fetch(`${API_BASE_URL}/trips`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    cache: 'no-store', // Mencegah caching data lama di Next.js
-  });
-
-  if (!response.ok) {
-    throw new Error(`Gagal mengambil data trips: ${response.statusText}`);
+const getToken = () => {
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('token');
+    return token ? token.trim() : '';
   }
+  return '';
+};
 
-  return response.json();
+export async function registerUser(data: any) {
+  const res = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Gagal mendaftar');
+  }
+  return res.json();
 }
 
-export async function deleteTrip(id: number): Promise<void> {
-  // Gunakan /trips/${id}
-  const response = await fetch(`${API_BASE_URL}/trips/${id}`, {
+export async function loginUser(data: { email: string; password: string }) {
+  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Gagal login');
+  }
+  return res.json();
+}
+
+export async function getMe() {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/auth/me`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  if (!res.ok) throw new Error('Gagal memuat profil');
+  return res.json();
+}
+
+export async function getTrips() {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/trips`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  if (!res.ok) {
+    throw new Error('Gagal mengambil data trips. Silakan login kembali.');
+  }
+  return res.json();
+}
+
+export async function getTrip(id: string) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/trips/${id}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  if (!res.ok) throw new Error('Gagal mengambil detail trip');
+  return res.json();
+}
+
+export async function createTrip(data: any) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/trips`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Gagal membuat trip');
+  }
+  return res.json();
+}
+
+export async function deleteTrip(id: number) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/trips/${id}`, {
     method: 'DELETE',
-  });
-
-  if (!response.ok) {
-    throw new Error(`Gagal menghapus trip #${id}`);
-  }
-}
-
-export async function getTrip(id: string | number): Promise<Trip> {
-  const response = await fetch(`${API_BASE_URL}/trips/${id}`, {
-    method: 'GET',
     headers: {
-      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
     },
-    cache: 'no-store',
   });
-
-  if (!response.ok) {
-    throw new Error(`Gagal mengambil detail trip #${id}: ${response.statusText}`);
-  }
-
-  return response.json();
+  if (!res.ok) throw new Error('Gagal menghapus trip');
+  return res.json();
 }

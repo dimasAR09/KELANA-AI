@@ -1,6 +1,9 @@
 'use client';
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { getMe } from '@/services/tripService';
+import { createTrip } from '@/services/tripService';
 
 const SparklesIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -52,6 +55,8 @@ const TRAVEL_STYLES = [
 ];
 
 export default function Home() {
+  const [user, setUser] = useState<any>(null);
+  const router = useRouter();
   const [destination, setDestination] = useState('');
   const [budget, setBudget] = useState('2000');
   const [days, setDays] = useState(3);
@@ -71,6 +76,17 @@ export default function Home() {
     } catch (e) {
       console.error('Gagal membaca dari localStorage:', e);
     }
+    const checkAuth = async () => {
+      try {
+        const userData = await getMe();
+        setUser(userData);
+      } catch {
+        setUser(null);
+      }
+    };
+    checkAuth();
+    window.addEventListener('auth-change', checkAuth);
+    return () => window.removeEventListener('auth-change', checkAuth);
   }, []);
 
   const saveResult = (result: any) => {
@@ -263,16 +279,22 @@ export default function Home() {
     const styleLabel = selectedStyleObj ? selectedStyleObj.name : travelStyle;
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/trips', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          destination: destination.trim(),
-          days: days,
-          budget: parsedBudget,
-          travel_style: travelStyle,
-        })
-      });
+  // 1. Ambil token dari localStorage
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';
+
+  const res = await fetch('http://localhost:8000/api/v1/trips', {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}` // <-- TAMBAHKAN BARIS INI
+    },
+    body: JSON.stringify({
+      destination: destination.trim(),
+      days: days,
+      budget: parsedBudget,
+      travel_style: travelStyle,
+    })
+  });
 
       if (res.ok) {
         setLoadingStep('Memproses rekomendasi AI dari database...');
@@ -399,12 +421,26 @@ export default function Home() {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <Link
-              href="/trips"
-              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5"
-            >
-              📜 History Trips
-            </Link>
+            {user ? (
+              <>
+                <span className="text-sm text-slate-300 hidden sm:inline-block">Halo, <span className="font-bold text-white">{user.name}</span></span>
+                <Link href="/profile" className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition">
+                  👤 Profil
+                </Link>
+                <Link href="/trips" className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition">
+                  📜 Riwayat
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition">
+                  Login
+                </Link>
+                <Link href="/register" className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition">
+                  Daftar
+                </Link>
+              </>
+            )}
             <span className="text-xs font-medium px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
               v2.0 Beta
             </span>

@@ -1,3 +1,9 @@
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
 export interface TripRequest {
   destination: string;
   days: number;
@@ -15,6 +21,7 @@ export interface Trip {
   travel_style?: string;
   recommended_transport?: string;
   ai_recommendation?: string;
+  user_id?: number;
   created_at?: string;
 }
 

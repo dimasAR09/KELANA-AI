@@ -1,17 +1,23 @@
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 import markdown
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 from database import SessionLocal, init_db
 from models.trip import Trip
+from models.user import User
 from services.bedrock_service import bedrock_service
+import bcrypt
+from services.auth_service import register, login, get_current_user, get_db, hash_password
+
 from services.trip_service import (
     calculate_daily_budget,
     get_trip_category,
 )
+from datetime import timedelta
 
 app = FastAPI(
     title="KelanaAI API",
@@ -30,6 +36,27 @@ app.add_middleware(
 init_db()
 
 # --- Pydantic Schemas ---
+
+class UserCreate(BaseModel):
+    name: str
+    email: str
+    password: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class UserResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+
+    class Config:
+        from_attributes = True
 
 class TripRequest(BaseModel):
     destination: str
@@ -50,11 +77,42 @@ class TripResponse(BaseModel):
     travel_style: Optional[str] = "Family"
     recommended_transport: Optional[str] = "Bus"  # Opsional agar data dari DB tidak error validation
     ai_recommendation: Optional[str] = None
+    user_id: Optional[int] = None
 
     class Config:
         from_attributes = True
 
 # --- API Endpoints ---
+
+@app.post("/api/v1/auth/register")
+def register_user(user: UserCreate, db: Session = Depends(get_db)):
+    """Endpoint untuk mendaftarkan user baru"""
+    # Cek apakah email sudah digunakan
+    existing_user = db.query(User).filter(User.email == user.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email sudah terdaftar")
+    
+    # Simpan user dengan password yang di-hash
+    new_user = User(
+        name=user.name,
+        email=user.email,
+        password_hash=hash_password(user.password)
+    )
+    db.add(new_user)
+    db.commit()
+    return {"message": "Registrasi berhasil"}
+
+@app.post("/api/v1/auth/login")
+def login_user(user: UserLogin):
+    token = login(user.email, user.password)
+    if not token:
+        raise HTTPException(status_code=401, detail="Email atau password salah")
+    return {"access_token": token, "token_type": "bearer"}
+
+@app.get("/api/v1/auth/me", response_model=UserResponse)
+def read_users_me(current_user: User = Depends(get_current_user)):
+    """Mendapatkan data pengguna yang sedang login"""
+    return current_user
 
 @app.get("/")
 def home():
@@ -65,14 +123,12 @@ def home():
     }
 
 @app.get("/api/v1/health")
-def health_check():
+def health_check(db: Session = Depends(get_db)):
     """Diagnostic endpoint to verify Database connectivity"""
     db_status = "OK"
     db_detail = "Database connected successfully"
     try:
-        db = SessionLocal()
         db.execute(text("SELECT 1"))
-        db.close()
     except Exception as e:
         db_status = "ERROR"
         db_detail = str(e)
@@ -84,7 +140,7 @@ def health_check():
     }
 
 @app.post("/api/v1/trips", response_model=TripResponse)    
-def create_trip(request: TripRequest):
+def create_trip(request: TripRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
     Create a new trip with AI-powered recommendations
     """
@@ -130,7 +186,6 @@ def create_trip(request: TripRequest):
         ai_recommendation = f"AI recommendation will be generated for your {request.days}-day trip to {request.destination} with a budget of ${request.budget}."
 
     # Save to database
-    db = SessionLocal()
     try:
         trip = Trip(
             destination=request.destination,
@@ -139,7 +194,8 @@ def create_trip(request: TripRequest):
             category=category,
             daily_budget=daily_budget,
             travel_style=travel_style,
-            ai_recommendation=ai_recommendation
+            ai_recommendation=ai_recommendation,
+            user_id=current_user.id
         )
         db.add(trip)
         db.commit()
@@ -154,7 +210,8 @@ def create_trip(request: TripRequest):
             daily_budget=trip.daily_budget,
             travel_style=getattr(trip, "travel_style", travel_style),
             recommended_transport=recommended_transport,
-            ai_recommendation=trip.ai_recommendation
+            ai_recommendation=trip.ai_recommendation,
+            user_id=trip.user_id
         )
     except Exception as e:
         db.rollback()
@@ -164,8 +221,6 @@ def create_trip(request: TripRequest):
         else:
             detail = f"Failed to save trip: {err_str}"
         raise HTTPException(status_code=500, detail=detail)
-    finally:
-        db.close()
 
 @app.get("/api/v1/trip-categories")
 def list_trip_categories():
@@ -205,11 +260,10 @@ def get_transportations():
 # Challenge session 4: Get All Trips (Diberikan response_model agar JSON Serialization sukses)
 @app.get("/api/v1/trips", response_model=List[TripResponse])
 @app.get("/api/v1/trips/", response_model=List[TripResponse], include_in_schema=False)
-def list_trips():
+def list_trips(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get all trips from database"""
-    db = SessionLocal()
     try:
-        trips = db.query(Trip).order_by(Trip.id.desc()).all()
+        trips = db.query(Trip).filter(Trip.user_id == current_user.id).order_by(Trip.id.desc()).all()
         return trips
     except Exception as e:
         err_str = str(e)
@@ -218,36 +272,34 @@ def list_trips():
         else:
             detail = f"Failed to fetch trips: {err_str}"
         raise HTTPException(status_code=500, detail=detail)
-    finally:
-        db.close() 
 
 @app.get("/api/v1/trips/{trip_id}", response_model=TripResponse)
-def get_trip(trip_id: int):
+def get_trip(trip_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
-    Get a specific trip by ID
+    Get a specific trip by ID (Protected)
     """
-    db = SessionLocal()
-    try:
-        trip = db.query(Trip).filter(Trip.id == trip_id).first()
+    trip = db.query(Trip).filter(Trip.id == trip_id).first()
+    
+    if trip is None:
+        raise HTTPException(status_code=404, detail=f"Trip with id {trip_id} not found")
+
+    if trip.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Akses ditolak: Ini bukan trip Anda.")
         
-        if trip is None:
-            raise HTTPException(status_code=404, detail=f"Trip with id {trip_id} not found")
-            
-        return trip
-    finally:
-        db.close()
+    return trip
 
 @app.delete("/api/v1/trips/{trip_id}")
-def delete_trip(trip_id: int):
+def delete_trip(trip_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
-    Delete a trip by ID
+    Delete a trip by ID (Protected)
     """
-    db = SessionLocal()
     try:
         trip = db.query(Trip).filter(Trip.id == trip_id).first()
 
         if trip is None:
             raise HTTPException(status_code=404, detail=f"Trip with id {trip_id} not found")
+        if trip.user_id != current_user.id:
+             raise HTTPException(status_code=403, detail="Akses ditolak: Anda tidak dapat menghapus trip ini.")
 
         db.delete(trip)
         db.commit()
@@ -257,20 +309,19 @@ def delete_trip(trip_id: int):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to delete trip: {str(e)}")
-    finally:
-        db.close()
 
 @app.put("/api/v1/trips/{trip_id}", response_model=TripResponse)
-def update_trip(trip_id: int, request: TripUpdate):
+def update_trip(trip_id: int, request: TripUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
-    Update trip budget and recalculate related fields
+    Update trip budget and recalculate related fields (Protected)
     """
-    db = SessionLocal()
     try:
         trip = db.query(Trip).filter(Trip.id == trip_id).first()
 
         if trip is None:
             raise HTTPException(status_code=404, detail=f"Trip with id {trip_id} not found")
+        if trip.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Akses ditolak: Anda tidak dapat mengubah trip ini.")
 
         # Update budget
         trip.budget = request.budget
@@ -295,8 +346,6 @@ def update_trip(trip_id: int, request: TripUpdate):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update trip: {str(e)}")
-    finally:
-        db.close()
 
 # Additional endpoint to test AI recommendation directly
 @app.post("/api/v1/ai/generate-itinerary")
@@ -322,15 +371,17 @@ def generate_itinerary(request: TripRequest):
         raise HTTPException(status_code=500, detail=f"Failed to generate itinerary: {str(e)}")
 
 @app.post("/api/v1/trips/{trip_id}/generate")
-def generate_and_save_itinerary(trip_id: int):
+def generate_and_save_itinerary(trip_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
     Generate a rich AI itinerary for an existing trip and save it to the database.
     """
-    db = SessionLocal()
     try:
         trip = db.query(Trip).filter(Trip.id == trip_id).first()
         if trip is None:
             raise HTTPException(status_code=404, detail=f"Trip with id {trip_id} not found")
+
+        if trip.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Akses ditolak: Anda tidak memiliki akses ke trip ini.")
 
         # Gunakan field travel_style jika tersedia
         travel_style = getattr(trip, 'travel_style', trip.category)
@@ -354,28 +405,29 @@ def generate_and_save_itinerary(trip_id: int):
             "category": trip.category,
             "daily_budget": trip.daily_budget,
             "travel_style": travel_style,
-            "ai_recommendation": trip.ai_recommendation
+            "ai_recommendation": trip.ai_recommendation,
+            "user_id": trip.user_id
         }
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to generate itinerary: {str(e)}")
-    finally:
-        db.close()
 
 # HTML Render Endpoint (Sudah Ditutup String Triple Quote dan Ditambahkan Return)
 @app.get("/api/v1/trips/{trip_id}/itinerary-html", response_class=HTMLResponse)
-def get_trip_itinerary_html(trip_id: int):
+def get_trip_itinerary_html(trip_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
-    Get trip AI recommendation rendered as HTML
+    Get trip AI recommendation rendered as HTML (Protected)
     """
-    db = SessionLocal()
     try:
         trip = db.query(Trip).filter(Trip.id == trip_id).first()
         
         if trip is None:
             raise HTTPException(status_code=404, detail=f"Trip with id {trip_id} not found")
+
+        if trip.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Akses ditolak: Ini bukan trip Anda.")
         
         if not trip.ai_recommendation:
             raise HTTPException(status_code=404, detail="No AI recommendation available for this trip")
@@ -441,6 +493,7 @@ def get_trip_itinerary_html(trip_id: int):
 </html>"""
 
         return HTMLResponse(content=full_html, status_code=200)
-
-    finally:
-        db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to render HTML: {str(e)}")
