@@ -12,22 +12,29 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Di dalam fungsi form onSubmit Anda:
-try {
-  const data = await loginUser({
-    email: email.trim(),
-    password: password
-  });
-  
-  // 1. SIMPAN TOKEN KE LOCAL STORAGE (Sangat Penting!)
-  localStorage.setItem('token', data.access_token);
-  
-  // 2. Redirect ke halaman /trips
-  router.push('/trips');
-  
-} catch (error: any) {
-  setError(error.message);
-}
+    setError('');
+    try {
+      const data = await loginUser({
+        email: email.trim(),
+        password: password
+      });
+      
+      console.log("Respon Login dari Backend:", data);
+      
+      const tokenToSave = data.access_token || data.token;
+      
+      if (tokenToSave) {
+        localStorage.setItem('token', tokenToSave);
+      } else {
+        alert("Token tidak ditemukan di respon server!");
+        return;
+      }
+      
+      router.push('/trips');
+      
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : 'Login gagal');
+    }
   };
 
   return (

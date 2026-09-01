@@ -18,7 +18,7 @@ export default function ProfilePage() {
         setUser(userData);
         const trips = await getTrips();
         setTripCount(trips.length);
-      } catch (err) {
+      } catch {
         router.push('/login');
       } finally {
         setLoading(false);

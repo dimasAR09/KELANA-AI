@@ -1,9 +1,11 @@
 'use client';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { getMe } from '@/services/tripService';
-import { createTrip } from '@/services/tripService';
+import { User } from '@/types';
+
+// ─── Icon Components ──────────────────────────────────────────────────────────
 
 const SparklesIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -32,12 +34,15 @@ const CompassIcon = () => (
   </svg>
 );
 const CheckCircleIcon = () => (
-  <svg className="w-5 h-5 text-emerald-500 inline mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <svg className="w-5 h-5 text-emerald-500 inline mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 );
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const QUICK_DESTINATIONS = ['Japan 🏯', 'Bali 🏝️', 'Australia 🐨'];
+
 const DESTINATION_SPOTS: Record<string, string[]> = {
   japan: ["Tokyo Tower", "Shibuya Crossing", "Mount Fuji", "Kyoto Arashiyama", "Osaka Dotonbori", "Nara Park", "Akihabara"],
   jepang: ["Tokyo Tower", "Shibuya Crossing", "Mount Fuji", "Kyoto Arashiyama", "Osaka Dotonbori", "Nara Park", "Akihabara"],
@@ -46,50 +51,216 @@ const DESTINATION_SPOTS: Record<string, string[]> = {
 };
 
 const TRAVEL_STYLES = [
-  { id: 'family', name: 'Keluarga', icon: '👨‍👩‍👧‍👦', desc: 'Nyaman & santai' },
-  { id: 'backpacker', name: 'Hemat / Backpacker', icon: '🎒', desc: 'Efisien & terjangkau' },
-  { id: 'luxury', name: 'Mewah', icon: '✨', desc: 'Eksklusif & premium' },
-  { id: 'solo', name: 'Solo Adventure', icon: '🧗', desc: 'Bebas & eksploratif' },
-  { id: 'romantic', name: 'Pasangan', icon: '👩‍❤️‍👨', desc: 'Romantis & intim' },
-  { id: 'culinary', name: 'Kuliner', icon: '🍜', desc: 'Eksplor makanan lokal' },
+  { id: 'family',      name: 'Keluarga',             icon: '👨‍👩‍👧‍👦', desc: 'Nyaman & santai' },
+  { id: 'backpacker',  name: 'Hemat / Backpacker',   icon: '🎒', desc: 'Efisien & terjangkau' },
+  { id: 'luxury',      name: 'Mewah',                icon: '✨', desc: 'Eksklusif & premium' },
+  { id: 'solo',        name: 'Solo Adventure',       icon: '🧗', desc: 'Bebas & eksploratif' },
+  { id: 'romantic',    name: 'Pasangan',             icon: '👩‍❤️‍👨', desc: 'Romantis & intim' },
+  { id: 'culinary',    name: 'Kuliner',              icon: '🍜', desc: 'Eksplor makanan lokal' },
 ];
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface DayPlan {
+  day: number;
+  title: string;
+  activities: string[];
+}
+
+interface TripResult {
+  id?: number;
+  destination: string;
+  days: number;
+  budget: string;
+  dailyBudget: string;
+  style: string;
+  highlights: string[];
+  itinerary: DayPlan[];
+  rawMarkdown?: string;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const formatUSD = (val: string) => {
+  const num = parseInt(val.toString().replace(/\D/g, ''), 10);
+  if (isNaN(num)) return '';
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
+};
+
+const parseAiText = (text: string): { highlights: string[]; itinerary: DayPlan[]; rawMarkdown: string } => {
+  if (!text) return { highlights: [], itinerary: [], rawMarkdown: '' };
+
+  const trimmed = text.trim();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed) as { itinerary?: DayPlan[]; highlights?: string[] };
+      if (parsed && (parsed.itinerary || parsed.highlights)) {
+        return {
+          highlights: parsed.highlights || [],
+          itinerary: parsed.itinerary || [],
+          rawMarkdown: '',
+        };
+      }
+    } catch {
+      // not valid JSON — fall through to line-by-line parsing
+    }
+  }
+
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const highlights: string[] = [];
+  const itinerary: DayPlan[] = [];
+  let currentDay: DayPlan | null = null;
+  let inOverview = false;
+  let inTips = false;
+
+  for (const line of lines) {
+    if (line.includes('Trip Overview')) { inOverview = true; continue; }
+    if (line.includes('Daily Itinerary') || line.includes('Day 1')) { inOverview = false; }
+    if (line.includes('Essential Tips') || line.includes('Top 5 Insider Tips')) {
+      inTips = true;
+      inOverview = false;
+      if (currentDay) { itinerary.push(currentDay); currentDay = null; }
+      continue;
+    }
+    if (inOverview && (line.includes('Destination:') || line.includes('Duration:') || line.includes('Budget:') || line.includes('Travel Style:'))) {
+      continue;
+    }
+
+    const dayMatch = line.match(/^(?:#+\s*|\*\*|)(?:🌅\s*)?(Day|Hari)\s*(\d+)\s*[:\-|]?\s*(.*?)(?:\*\*|)$/i);
+    if (dayMatch) {
+      if (currentDay) itinerary.push(currentDay);
+      const dayNum = parseInt(dayMatch[2], 10);
+      const titleText = dayMatch[3] ? dayMatch[3].replace(/^\*+|\*+$/g, '').trim() : `Eksplorasi Hari ${dayNum}`;
+      currentDay = {
+        day: dayNum,
+        title: `Hari ke-${dayNum}: ${titleText || 'Aktivitas Wisata'}`,
+        activities: [],
+      };
+      inOverview = false;
+      inTips = false;
+      continue;
+    }
+
+    if (line.startsWith('-') || line.startsWith('*') || line.match(/^\d+\./)) {
+      const cleanLine = line.replace(/^[-*\d.]+\s*/, '').replace(/\*\*/g, '').trim();
+      if (currentDay) {
+        currentDay.activities.push(cleanLine);
+      } else if (inTips && highlights.length < 4) {
+        highlights.push(cleanLine);
+      }
+    } else if (!line.startsWith('#') && !currentDay && !inOverview && highlights.length < 3) {
+      const cleanLine = line.replace(/^[#*\s]+/, '').trim();
+      if (cleanLine && !cleanLine.includes('Destination') && !cleanLine.includes('Budget')) {
+        highlights.push(cleanLine);
+      }
+    }
+  }
+
+  if (currentDay) itinerary.push(currentDay);
+
+  return {
+    highlights: highlights.length
+      ? highlights
+      : ['Eksplorasi destinasi pilihan dengan rute optimal', 'Rekomendasi kuliner & aktivitas harian terbaik'],
+    itinerary,
+    rawMarkdown: text,
+  };
+};
+
+const getStyleActivities = (style: string, destination: string, spotName: string, dailyBudStr: string): string[] => {
+  switch (style) {
+    case 'luxury':
+      return [
+        `08:30 - Sarapan buffet eksklusif & Penjemputan Private Car (Estimasi harian ~${dailyBudStr})`,
+        `10:30 - Kunjungan VIP & tur privat berpemandu di ${spotName}`,
+        `13:00 - Makan siang Fine Dining kuliner berbintang khas ${destination}`,
+        `16:00 - Sesi relaksasi Spa / Lounge pemandangan premium`,
+        `19:30 - Candlelight Dinner romantis & pengalaman malam eksklusif`,
+      ];
+    case 'backpacker':
+      return [
+        `08:00 - Sarapan hemat lokal & berangkat naik transportasi umum`,
+        `09:30 - Eksplorasi spot foto populer & jalan santai di ${spotName}`,
+        `12:30 - Makan siang street food / kedai lokal favorit warga setempat`,
+        `15:00 - Tur budaya mandiri & eksplorasi kawasan bersejarah ${destination}`,
+        `18:30 - Berburu kuliner malam terjangkau di Night Market`,
+      ];
+    case 'culinary':
+      return [
+        `08:30 - Wisata kuliner sarapan legendaris khas ${destination}`,
+        `10:30 - Mengunjungi pasar tradisional & cooking class masakan lokal`,
+        `13:00 - Santap siang hidangan paling ikonik di ${spotName}`,
+        `16:00 - Tasting dessert, kafe estetik & camilan manis khas setempat`,
+        `19:00 - Wisata kuliner malam & eksplorasi rekomendasi resto terbaik`,
+      ];
+    case 'romantic':
+      return [
+        `09:00 - Sarapan santai dengan pemandangan indah bersama pasangan`,
+        `11:00 - Jalan-jalan romantis & momen berfoto di ${spotName}`,
+        `13:30 - Makan siang di kafe berkonsep intim & estetik`,
+        `16:30 - Menikmati sunset di spot pemandangan terbaik ${destination}`,
+        `19:30 - Dinner romantis spesial & menikmati suasana malam`,
+      ];
+    case 'solo':
+      return [
+        `08:00 - Morning walk & eksplor hidden gem di sekitar ${destination}`,
+        `10:00 - Mengunjungi galeri/museum & tur mandiri di ${spotName}`,
+        `12:30 - Makan siang santai di kafe lokal`,
+        `15:00 - Photography walk & sosialisasi dengan warga lokal`,
+        `18:30 - Santai malam di tempat musik lokal & eksplorasi bebas`,
+      ];
+    default: // family
+      return [
+        `08:30 - Penjemputan keluarga & sarapan ramah anak/semua usia`,
+        `10:00 - Kunjungan ke wahana/area wisata keluarga di ${spotName}`,
+        `13:00 - Makan siang bersama di restoran keluarga yang nyaman`,
+        `15:30 - Aktivitas santai & berburu suvenir khas ${destination}`,
+        `18:30 - Makan malam keluarga & kembali istirahat di hotel`,
+      ];
+  }
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 export default function Home() {
-  const [user, setUser] = useState<any>(null);
-  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
   const [destination, setDestination] = useState('');
   const [budget, setBudget] = useState('2000');
   const [days, setDays] = useState(3);
   const [travelStyle, setTravelStyle] = useState('family');
   const [styleSearchQuery, setStyleSearchQuery] = useState('');
-  
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
-  const [generatedResult, setGeneratedResult] = useState<any>(null);
+  const [generatedResult, setGeneratedResult] = useState<TripResult | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
+    // Load persisted result from localStorage
     try {
       const saved = localStorage.getItem('kelana_ai_trip');
       if (saved) {
-        setGeneratedResult(JSON.parse(saved));
+        setGeneratedResult(JSON.parse(saved) as TripResult);
       }
     } catch (e) {
       console.error('Gagal membaca dari localStorage:', e);
     }
+
+    // Check auth
     const checkAuth = async () => {
       try {
         const userData = await getMe();
-        setUser(userData);
+        setUser(userData as User);
       } catch {
         setUser(null);
       }
     };
+
     checkAuth();
     window.addEventListener('auth-change', checkAuth);
     return () => window.removeEventListener('auth-change', checkAuth);
   }, []);
 
-  const saveResult = (result: any) => {
+  const saveResult = (result: TripResult) => {
     setGeneratedResult(result);
     try {
       localStorage.setItem('kelana_ai_trip', JSON.stringify(result));
@@ -125,211 +296,76 @@ export default function Home() {
     );
   }, [styleSearchQuery]);
 
-  const formatUSD = (val: string) => {
-    const num = parseInt(val.toString().replace(/\D/g, ''), 10);
-    if (isNaN(num)) return '';
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
-  };
-
-  const parseAiText = (text: string) => {
-    if (!text) return { highlights: [], itinerary: [], rawMarkdown: '' };
-    const trimmed = text.trim();
-    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (parsed && (parsed.itinerary || parsed.highlights)) {
-          return {
-            highlights: parsed.highlights || [],
-            itinerary: parsed.itinerary || [],
-            rawMarkdown: ''
-          };
-        }
-      } catch (e) {}
-    }
-
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    const highlights: string[] = [];
-    const itinerary: { day: number; title: string; activities: string[] }[] = [];
-    let currentDay: { day: number; title: string; activities: string[] } | null = null;
-    let inOverview = false;
-    let inTips = false;
-
-    for (const line of lines) {
-      if (line.includes('Trip Overview')) {
-        inOverview = true;
-        continue;
-      }
-      if (line.includes('Daily Itinerary') || line.includes('Day 1')) {
-        inOverview = false;
-      }
-      if (line.includes('Essential Tips') || line.includes('Top 5 Insider Tips')) {
-        inTips = true;
-        inOverview = false;
-        if (currentDay) {
-          itinerary.push(currentDay);
-          currentDay = null;
-        }
-        continue;
-      }
-      if (inOverview && (line.includes('Destination:') || line.includes('Duration:') || line.includes('Budget:') || line.includes('Travel Style:'))) {
-        continue;
-      }
-
-      const dayMatch = line.match(/^(?:#+\s*|\*\*|)(?:🌅\s*)?(Day|Hari)\s*(\d+)\s*[:\-\|]?\s*(.*?)(?:\*\*|)$/i);
-      if (dayMatch) {
-        if (currentDay) itinerary.push(currentDay);
-        const dayNum = parseInt(dayMatch[2], 10);
-        const titleText = dayMatch[3] ? dayMatch[3].replace(/^\*+|\*+$/g, '').trim() : `Eksplorasi Hari ${dayNum}`;
-        currentDay = {
-          day: dayNum,
-          title: `Hari ke-${dayNum}: ${titleText || 'Aktivitas Wisata'}`,
-          activities: []
-        };
-        inOverview = false;
-        inTips = false;
-        continue;
-      }
-
-      if (line.startsWith('-') || line.startsWith('*') || line.match(/^\d+\./)) {
-        const cleanLine = line.replace(/^[\-\*\d\.]+\s*/, '').replace(/\*\*/g, '').trim();
-        if (currentDay) {
-          currentDay.activities.push(cleanLine);
-        } else if (inTips && highlights.length < 4) {
-          highlights.push(cleanLine);
-        }
-      } else if (!line.startsWith('#') && !currentDay && !inOverview && highlights.length < 3) {
-        const cleanLine = line.replace(/^[#\*\s]+/, '').trim();
-        if (cleanLine && !cleanLine.includes('Destination') && !cleanLine.includes('Budget')) highlights.push(cleanLine);
-      }
-    }
-    if (currentDay) itinerary.push(currentDay);
-    return {
-      highlights: highlights.length ? highlights : [
-        'Eksplorasi destinasi pilihan dengan rute optimal',
-        'Rekomendasi kuliner & aktivitas harian terbaik'
-      ],
-      itinerary,
-      rawMarkdown: text
-    };
-  };
-
-  // Helper untuk aktivitas spesifik sesuai Travel Style & Hari
-  const getStyleActivities = (style: string, dest: string, dayNum: number, spotName: string, dailyBudStr: string) => {
-    switch (style) {
-      case 'luxury':
-        return [
-          `08:30 - Sarapan buffet eksklusif & Penjemputan Private Car (Estimasi harian ~${dailyBudStr})`,
-          `10:30 - Kunjungan VIP & tur privat berpemandu di ${spotName}`,
-          `13:00 - Makan siang Fine Dining kuliner berbintang khas ${dest}`,
-          `16:00 - Sesi relaksasi Spa / Lounge pemandangan premium`,
-          `19:30 - Candlelight Dinner romantis & pengalaman malam eksklusif`,
-        ];
-      case 'backpacker':
-        return [
-          `08:00 - Sarapan hemat lokal & berangkat naik transportasi umum`,
-          `09:30 - Eksplorasi spot foto populer & jalan santai di ${spotName}`,
-          `12:30 - Makan siang street food / kedai lokal favorit warga setempat`,
-          `15:00 - Tur budaya mandiri & eksplorasi kawasan bersejarah ${dest}`,
-          `18:30 - Berburu kuliner malam terjangkau di Night Market`,
-        ];
-      case 'culinary':
-        return [
-          `08:30 - Wisata kuliner sarapan legendaris khas ${dest}`,
-          `10:30 - Mengunjungi pasar tradisional & cooking class masakan lokal`,
-          `13:00 - Santap siang hidangan paling ikonik di ${spotName}`,
-          `16:00 - Tasting dessert, kafe estetik & camilan manis khas setempat`,
-          `19:00 - Wisata kuliner malam & eksplorasi rekomendasi resto terbaik`,
-        ];
-      case 'romantic':
-        return [
-          `09:00 - Sarapan santai dengan pemandangan indah bersama pasangan`,
-          `11:00 - Jalan-jalan romantis & momen berfoto di ${spotName}`,
-          `13:30 - Makan siang di kafe berkonsep intim & estetik`,
-          `16:30 - Menikmati sunset di spot pemandangan terbaik ${dest}`,
-          `19:30 - Dinner romantis spesial & menikmati suasana malam`,
-        ];
-      case 'solo':
-        return [
-          `08:00 - Morning walk & eksplor hidden gem di sekitar ${dest}`,
-          `10:00 - Mengunjungi galeri/museum & tur mandiri di ${spotName}`,
-          `12:30 - Makan siang santai di kafe lokal`,
-          `15:00 - Photography walk & sosialisasi dengan warga lokal`,
-          `18:30 - Santai malam di tempat musik lokal & eksplorasi bebas`,
-        ];
-      default: // family
-        return [
-          `08:30 - Penjemputan keluarga & sarapan ramah anak/semua usia`,
-          `10:00 - Kunjungan ke wahana/area wisata keluarga di ${spotName}`,
-          `13:00 - Makan siang bersama di restoran keluarga yang nyaman`,
-          `15:30 - Aktivitas santai & berburu suvenir khas ${dest}`,
-          `18:30 - Makan malam keluarga & kembali istirahat di hotel`,
-        ];
-    }
-  };
-
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!destination.trim()) return;
+
     setIsGenerating(true);
     setGeneratedResult(null);
     setLoadingStep('Mengirim data ke server backend Python (:8000)...');
-    
+
     const parsedBudget = parseFloat(budget) || 2000;
-    const selectedStyleObj = TRAVEL_STYLES.find(s => s.id === travelStyle);
+    const selectedStyleObj = TRAVEL_STYLES.find((s) => s.id === travelStyle);
     const styleLabel = selectedStyleObj ? selectedStyleObj.name : travelStyle;
 
     try {
-  // 1. Ambil token dari localStorage
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';
 
-  const res = await fetch('http://localhost:8000/api/v1/trips', {
-    method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}` // <-- TAMBAHKAN BARIS INI
-    },
-    body: JSON.stringify({
-      destination: destination.trim(),
-      days: days,
-      budget: parsedBudget,
-      travel_style: travelStyle,
-    })
-  });
+      const res = await fetch('http://localhost:8000/api/v1/trips', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          destination: destination.trim(),
+          days,
+          budget: parsedBudget,
+          travel_style: travelStyle,
+        }),
+      });
 
       if (res.ok) {
         setLoadingStep('Memproses rekomendasi AI dari database...');
-        const data = await res.json();
+        const data = await res.json() as {
+          id: number;
+          destination: string;
+          days: number;
+          budget: number;
+          ai_recommendation?: string;
+        };
         const parsedAi = parseAiText(data.ai_recommendation || '');
         setIsGenerating(false);
 
-        const newResult = {
+        saveResult({
           id: data.id,
           destination: data.destination,
           days: data.days,
           budget: formatUSD(data.budget.toString()),
           dailyBudget: formatUSD((data.budget / data.days).toFixed(0)),
           style: styleLabel,
-          highlights: parsedAi.highlights.length ? parsedAi.highlights : [
-            `Pengalaman perjalanan ${styleLabel} selama ${data.days} hari`,
-            `Alokasi total budget ${formatUSD(data.budget.toString())} (${formatUSD((data.budget / data.days).toFixed(0))}/hari)`
-          ],
+          highlights: parsedAi.highlights.length
+            ? parsedAi.highlights
+            : [
+                `Pengalaman perjalanan ${styleLabel} selama ${data.days} hari`,
+                `Alokasi total budget ${formatUSD(data.budget.toString())} (${formatUSD((data.budget / data.days).toFixed(0))}/hari)`,
+              ],
           itinerary: parsedAi.itinerary,
-          rawMarkdown: parsedAi.rawMarkdown
-        };
-        saveResult(newResult);
+          rawMarkdown: parsedAi.rawMarkdown,
+        });
         return;
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.log('Backend offline / error 500, menjalankan simulasi fallback presisi...', error);
     }
 
-    // SIMULASI FALLBACK PRESISI sesuai input user jika backend 500
+    // Fallback simulation
     setLoadingStep('Menganalisis karakteristik destinasi & gaya perjalanan...');
     setTimeout(() => setLoadingStep('Menghitung alokasi budget harian efisien...'), 1000);
     setTimeout(() => setLoadingStep(`Menyusun ${days} hari itinerary presisi...`), 2000);
     setTimeout(() => {
       setIsGenerating(false);
-      
+
       const destLower = destination.trim().toLowerCase();
       const matchedSpots = DESTINATION_SPOTS[destLower] || [
         `Pusat Kota & Landmark Ikonik ${destination}`,
@@ -342,9 +378,9 @@ export default function Home() {
       const dailyBudVal = formatUSD((parsedBudget / days).toFixed(0));
       const budgetTotalStr = formatUSD(budget);
 
-      const fallbackResult = {
+      saveResult({
         destination,
-        days: days,
+        days,
         budget: budgetTotalStr,
         dailyBudget: dailyBudVal,
         style: styleLabel,
@@ -354,24 +390,22 @@ export default function Home() {
           `Rekomendasi spot ikonik: ${matchedSpots.slice(0, 3).join(', ')}`,
           `Rangkaian aktivitas yang fleksibel & dioptimalkan sesuai preferensi ${styleLabel}`,
         ],
-        // Menghasilkan itinerary persis sebanyak N (days) hari yang diinputkan
         itinerary: Array.from({ length: days }, (_, i) => {
           const spotName = matchedSpots[i % matchedSpots.length];
           return {
             day: i + 1,
             title: `Hari ke-${i + 1}: Eksplorasi ${spotName}`,
-            activities: getStyleActivities(travelStyle, destination, i + 1, spotName, dailyBudVal)
+            activities: getStyleActivities(travelStyle, destination, spotName, dailyBudVal),
           };
-        })
-      };
-      saveResult(fallbackResult);
+        }),
+      });
     }, 3200);
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.25),rgba(255,255,255,0))] relative">
-      
-      {/* FULLSCREEN LOADING STAGE OVERLAY */}
+
+      {/* FULLSCREEN LOADING OVERLAY */}
       {isGenerating && (
         <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-4 transition-all duration-300">
           <div className="relative max-w-lg w-full bg-slate-900/90 border border-indigo-500/30 rounded-3xl p-8 text-center shadow-2xl shadow-indigo-500/20 space-y-6 overflow-hidden">
@@ -398,7 +432,7 @@ export default function Home() {
               <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
                 <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 h-full w-full animate-pulse rounded-full"></div>
               </div>
-              <p className="text-xs sm:text-sm text-slate-300 font-medium min-h-[20px] animate-fade-in">
+              <p className="text-xs sm:text-sm text-slate-300 font-medium min-h-5 animate-fade-in">
                 {loadingStep || 'Sedang menyusun petualangan impianmu...'}
               </p>
             </div>
@@ -423,7 +457,9 @@ export default function Home() {
           <div className="flex items-center gap-3">
             {user ? (
               <>
-                <span className="text-sm text-slate-300 hidden sm:inline-block">Halo, <span className="font-bold text-white">{user.name}</span></span>
+                <span className="text-sm text-slate-300 hidden sm:inline-block">
+                  Halo, <span className="font-bold text-white">{user.name}</span>
+                </span>
                 <Link href="/profile" className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition">
                   👤 Profil
                 </Link>
@@ -449,22 +485,37 @@ export default function Home() {
       </header>
 
       {/* Hero Banner */}
-      <div className="w-full h-48 sm:h-72 md:h-[360px] relative overflow-hidden flex select-none pointer-events-none z-0">
-        <img
-          src="https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80"
-          alt="Landmark Jepang"
-          className="w-1/3 h-full object-cover border-r border-slate-900/50"
-        />
-        <img
-          src="https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=800&q=80"
-          alt="Landmark Bali"
-          className="w-1/3 h-full object-cover border-r border-slate-900/50"
-        />
-        <img
-          src="https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?auto=format&fit=crop&w=800&q=80"
-          alt="Landmark Australia"
-          className="w-1/3 h-full object-cover"
-        />
+      <div className="w-full h-48 sm:h-72 relative overflow-hidden flex select-none pointer-events-none z-0">
+        <div className="relative w-1/3 h-full border-r border-slate-900/50">
+          <Image
+            src="https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80"
+            alt="Landmark Jepang"
+            fill
+            className="object-cover"
+            unoptimized
+            priority
+          />
+        </div>
+        <div className="relative w-1/3 h-full border-r border-slate-900/50">
+          <Image
+            src="https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=800&q=80"
+            alt="Landmark Bali"
+            fill
+            className="object-cover"
+            unoptimized
+            priority
+          />
+        </div>
+        <div className="relative w-1/3 h-full">
+          <Image
+            src="https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?auto=format&fit=crop&w=800&q=80"
+            alt="Landmark Australia"
+            fill
+            className="object-cover"
+            unoptimized
+            priority
+          />
+        </div>
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent pointer-events-none"></div>
         <div className="absolute inset-0 bg-slate-900/20 mix-blend-multiply pointer-events-none"></div>
       </div>
@@ -499,7 +550,7 @@ export default function Home() {
           </div>
 
           <form onSubmit={handleGenerate} className="space-y-6">
-            {/* Input Destinasi (Text Search) */}
+            {/* Destinasi */}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
                 <MapPinIcon />
@@ -510,7 +561,7 @@ export default function Home() {
                 value={destination}
                 onChange={(e) => setDestination(e.target.value)}
                 placeholder="Cari atau ketik destinasi: Jepang, Bali, Yogyakarta, Swiss..."
-                className="w-full px-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-white placeholder-slate-500 text-base"
+                className="w-full px-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-white placeholder:text-slate-500 text-base"
                 required
               />
               <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -529,7 +580,7 @@ export default function Home() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {/* Budget Input */}
+              {/* Budget */}
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
                   <WalletIcon />
@@ -542,14 +593,14 @@ export default function Home() {
                   placeholder="2000"
                   step="100"
                   min="50"
-                  className="w-full px-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-white placeholder-slate-500 text-base"
+                  className="w-full px-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-white placeholder:text-slate-500 text-base"
                 />
                 <p className="text-xs text-emerald-400 font-medium pt-0.5">
                   Estimasi: {formatUSD(budget) || '$0'}
                 </p>
               </div>
 
-              {/* Days Counter */}
+              {/* Days */}
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
                   <CalendarIcon />
@@ -577,20 +628,19 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Travel Style (Pencarian & Pemilihan Gaya) */}
+            {/* Travel Style */}
             <div className="space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
                   <CompassIcon />
                   <span>GAYA PERJALANAN (Travel Style)</span>
                 </label>
-                {/* Search bar untuk Travel Style */}
                 <input
                   type="text"
                   value={styleSearchQuery}
                   onChange={(e) => setStyleSearchQuery(e.target.value)}
                   placeholder="🔍 Cari gaya (misal: Mewah, Backpacker)..."
-                  className="px-3 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white placeholder-slate-500 focus:ring-1 focus:ring-indigo-500 outline-none w-full sm:w-64"
+                  className="px-3 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white placeholder:text-slate-500 focus:ring-1 focus:ring-indigo-500 outline-none w-full sm:w-64"
                 />
               </div>
 
@@ -602,7 +652,9 @@ export default function Home() {
                       type="button"
                       onClick={() => setTravelStyle(style.id)}
                       className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between gap-2 cursor-pointer ${
-                        travelStyle === style.id ? 'bg-indigo-600 border-indigo-500' : 'bg-slate-800/50 border-slate-700 hover:border-slate-600'
+                        travelStyle === style.id
+                          ? 'bg-indigo-600 border-indigo-500'
+                          : 'bg-slate-800/50 border-slate-700 hover:border-slate-600'
                       }`}
                     >
                       <span className="text-2xl">{style.icon}</span>
@@ -614,7 +666,7 @@ export default function Home() {
                   ))
                 ) : (
                   <div className="col-span-2 sm:col-span-3 text-center py-4 text-xs text-slate-400 bg-slate-950/50 rounded-xl border border-slate-800">
-                    Gaya liburan "{styleSearchQuery}" tidak ditemukan.
+                    Gaya liburan &ldquo;{styleSearchQuery}&rdquo; tidak ditemukan.
                   </div>
                 )}
               </div>
@@ -635,7 +687,6 @@ export default function Home() {
           <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6 mt-10">
             <div className="flex flex-wrap justify-between items-center gap-3 pb-4 border-b border-slate-800">
               <h3 className="text-2xl font-bold text-white">🎉 Itinerary Anda Sudah Siap!</h3>
-              
               <div className="flex items-center gap-3">
                 <button
                   onClick={handlePrint}
@@ -643,7 +694,7 @@ export default function Home() {
                 >
                   🖨️ Print / Simpan PDF
                 </button>
-                <button 
+                <button
                   onClick={handleClearResult}
                   className="px-3.5 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-bold transition cursor-pointer"
                 >
@@ -671,11 +722,11 @@ export default function Home() {
               </div>
             </div>
 
-            {generatedResult.highlights && generatedResult.highlights.length > 0 && (
+            {generatedResult.highlights.length > 0 && (
               <div className="space-y-3">
                 <h4 className="font-bold text-white">✨ Sorotan Perjalanan</h4>
                 <ul className="space-y-2">
-                  {generatedResult.highlights.map((highlight: string, idx: number) => (
+                  {generatedResult.highlights.map((highlight, idx) => (
                     <li key={idx} className="flex items-start text-sm text-slate-300">
                       <CheckCircleIcon />
                       <span>{highlight}</span>
@@ -685,15 +736,15 @@ export default function Home() {
               </div>
             )}
 
-            {generatedResult.itinerary && generatedResult.itinerary.length > 0 && (
+            {generatedResult.itinerary.length > 0 && (
               <div className="space-y-4 pt-4 border-t border-slate-800">
                 <h4 className="font-bold text-white text-lg">📅 Jadwal Harian ({generatedResult.days} Hari)</h4>
                 <div className="space-y-4">
-                  {generatedResult.itinerary.map((dayPlan: any, idx: number) => (
+                  {generatedResult.itinerary.map((dayPlan, idx) => (
                     <div key={idx} className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/50">
                       <h5 className="font-bold text-indigo-300 mb-3">{dayPlan.title}</h5>
                       <ul className="space-y-2 pl-2 border-l-2 border-indigo-500/30">
-                        {dayPlan.activities.map((act: string, actIdx: number) => (
+                        {dayPlan.activities.map((act, actIdx) => (
                           <li key={actIdx} className="text-sm text-slate-300 pl-4 relative">
                             <span className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-indigo-400"></span>
                             {act}

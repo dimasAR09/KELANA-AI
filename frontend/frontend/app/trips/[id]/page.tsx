@@ -21,7 +21,7 @@ export default function TripDetailPage() {
       try {
         const data = await getTrip(id);
         setTrip(data);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(err);
         setError(`Trip dengan ID #${id} tidak ditemukan.`);
       } finally {
@@ -37,8 +37,8 @@ export default function TripDetailPage() {
       try {
         await deleteTrip(trip.id);
         router.push('/trips');
-      } catch (err: any) {
-        alert(err.message || 'Gagal menghapus trip');
+      } catch (err: unknown) {
+        alert(err instanceof Error ? err.message : 'Gagal menghapus trip');
       }
     }
   };

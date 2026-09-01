@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel
 from typing import Optional, List
 import markdown
@@ -12,6 +13,7 @@ from models.user import User
 from services.bedrock_service import bedrock_service
 import bcrypt
 from services.auth_service import register, login, get_current_user, get_db, hash_password
+from services.kb_service import ask_knowledge_base
 
 from services.trip_service import (
     calculate_daily_budget,
@@ -35,7 +37,34 @@ app.add_middleware(
 
 init_db()
 
+# Override OpenAPI schema agar Swagger UI bisa authorize dengan Bearer token
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+        }
+    }
+    for path in schema.get("paths", {}).values():
+        for operation in path.values():
+            operation["security"] = [{"BearerAuth": []}]
+    app.openapi_schema = schema
+    return schema
+
+app.openapi = custom_openapi
+
 # --- Pydantic Schemas ---
+class QuestionRequest(BaseModel):
+       question: str
 
 class UserCreate(BaseModel):
     name: str
@@ -437,7 +466,7 @@ def get_trip_itinerary_html(trip_id: int, current_user: User = Depends(get_curre
             trip.ai_recommendation,
             extensions=['tables', 'fenced_code', 'nl2br']
         )
-        
+
         # Wrap in HTML template
         full_html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -497,3 +526,22 @@ def get_trip_itinerary_html(trip_id: int, current_user: User = Depends(get_curre
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to render HTML: {str(e)}")
+
+
+@app.post("/api/v1/assistant")
+def ask_assistant_endpoint(request: QuestionRequest, current_user: User = Depends(get_current_user)):
+    """
+    Endpoint RAG: Menerima pertanyaan, mencari di Knowledge Base, dan mengembalikan jawaban.
+    Dilindungi dengan JWT (Hanya user login yang bisa bertanya).
+    """
+    try:
+        # Panggil fungsi yang ada di kb_service.py
+        result = ask_knowledge_base(request.question)
+        
+        return {
+            "question": request.question,
+            "answer": result["answer"],
+            "sources": result["sources"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to query assistant: " + str(e))

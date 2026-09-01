@@ -8,7 +8,7 @@ const getToken = () => {
   return '';
 };
 
-export async function registerUser(data: any) {
+export async function registerUser(data: { name?: string; email: string; password: string }) {
   const res = await fetch(`${API_BASE_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -48,18 +48,21 @@ export async function getMe() {
 }
 
 export async function getTrips() {
-  const token = getToken();
-  const res = await fetch(`${API_BASE_URL}/trips`, {
+  const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+
+  const response = await fetch('http://localhost:8000/api/v1/trips', {
     method: 'GET',
     headers: {
-      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
+      'Authorization': token ? `Bearer ${token}` : '',
     },
   });
-  if (!res.ok) {
-    throw new Error('Gagal mengambil data trips. Silakan login kembali.');
+
+  if (!response.ok) {
+    throw new Error('Gagal memuat data perjalanan');
   }
-  return res.json();
+
+  return response.json();
 }
 
 export async function getTrip(id: string) {
@@ -75,7 +78,7 @@ export async function getTrip(id: string) {
   return res.json();
 }
 
-export async function createTrip(data: any) {
+export async function createTrip(data: { destination: string; days: number; budget: number; travel_style: string }) {
   const token = getToken();
   const res = await fetch(`${API_BASE_URL}/trips`, {
     method: 'POST',
@@ -102,5 +105,23 @@ export async function deleteTrip(id: number) {
     },
   });
   if (!res.ok) throw new Error('Gagal menghapus trip');
+  return res.json();
+}
+
+export async function askAssistant(question: string) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/assistant`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ question }),
+  });
+  
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Gagal terhubung ke Asisten AI');
+  }
   return res.json();
 }

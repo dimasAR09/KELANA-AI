@@ -17,8 +17,8 @@ export default function RegisterPage() {
       await registerUser({ name, email, password });
       alert('Registrasi berhasil! Silakan login.');
       router.push('/login');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Registrasi gagal');
     }
   };
 
