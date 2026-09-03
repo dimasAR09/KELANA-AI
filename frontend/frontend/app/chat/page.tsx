@@ -206,11 +206,22 @@ export default function ChatPage() {
   // Rename modal
   const [renamingConv, setRenamingConv] = useState<Conversation | null>(null);
 
-  // Auto-scroll ref
-  const bottomRef = useRef<HTMLDivElement>(null);
+  // Auto-scroll refs
+  const bottomRef    = useRef<HTMLDivElement>(null);
+  const messagesRef  = useRef<HTMLDivElement>(null);
 
-  // ── Scroll to bottom on new messages ──
+  // ── Skenario 1: Scroll instan saat conversation pertama kali dibuka ──
+  // Gunakan 'auto' (tidak animasi) agar langsung loncat ke pesan terbaru
   useEffect(() => {
+    if (messagesRef.current) {
+      messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+    }
+  }, [activeConvId]);
+
+  // ── Skenario 2: Smooth scroll saat pesan baru masuk / typing indicator muncul ──
+  // Gunakan 'smooth' agar terasa natural saat mengirim pesan
+  useEffect(() => {
+    if (messages.length === 0) return;          // skip saat conversation kosong
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
@@ -447,7 +458,7 @@ export default function ChatPage() {
         </header>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto px-4 py-6">
+        <div ref={messagesRef} className="flex-1 overflow-y-auto px-4 py-6">
           {/* Empty state — no conversation selected */}
           {activeConvId === null && (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-center">

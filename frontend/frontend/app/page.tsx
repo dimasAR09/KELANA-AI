@@ -302,7 +302,6 @@ export default function Home() {
 
     setIsGenerating(true);
     setGeneratedResult(null);
-    setLoadingStep('Mengirim data ke server backend Python (:8000)...');
 
     const parsedBudget = parseFloat(budget) || 2000;
     const selectedStyleObj = TRAVEL_STYLES.find((s) => s.id === travelStyle);
@@ -437,7 +436,7 @@ export default function Home() {
               </p>
             </div>
             <div className="text-[11px] text-slate-500 italic pt-2 border-t border-slate-800/80">
-              Menghubungkan ke server backend FastAPI & AI Bedrock...
+              Menghubungkan ke server Kelana AI...
             </div>
           </div>
         </div>
