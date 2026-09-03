@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException, status, Depends
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, status, Depends, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel
 from typing import Optional, List
+import logging
 import markdown
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -19,6 +20,8 @@ from services.trip_service import (
     calculate_daily_budget,
     get_trip_category,
 )
+from services import conversation_service
+from models.conversation import Conversation, Message
 from datetime import timedelta
 
 app = FastAPI(
@@ -36,6 +39,18 @@ app.add_middleware(
 )
 
 init_db()
+
+# Suppress noisy Chrome DevTools probe requests from logs
+class EndpointFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "/.well-known/appspecific/com.chrome.devtools.json" not in record.getMessage()
+
+logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
+
+# Respond to Chrome DevTools probe so it stops sending 404s
+@app.get("/.well-known/appspecific/com.chrome.devtools.json", include_in_schema=False)
+def chrome_devtools_probe():
+    return JSONResponse(content={})
 
 # Override OpenAPI schema agar Swagger UI bisa authorize dengan Bearer token
 def custom_openapi():
@@ -95,6 +110,36 @@ class TripRequest(BaseModel):
 
 class TripUpdate(BaseModel):
     budget: float
+
+# --- Conversation Schemas ---
+class ConversationCreate(BaseModel):
+    title: Optional[str] = None
+
+class ConversationRename(BaseModel):
+    title: str
+
+class MessageSend(BaseModel):
+    content: str
+
+class MessageResponse(BaseModel):
+    id: int
+    conversation_id: int
+    role: str
+    content: str
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+class ConversationResponse(BaseModel):
+    id: int
+    user_id: int
+    title: Optional[str] = None
+    created_at: str
+    messages: List[MessageResponse] = []
+
+    class Config:
+        from_attributes = True
 
 class TripResponse(BaseModel):
     id: int
@@ -535,7 +580,6 @@ def ask_assistant_endpoint(request: QuestionRequest, current_user: User = Depend
     Dilindungi dengan JWT (Hanya user login yang bisa bertanya).
     """
     try:
-        # Panggil fungsi yang ada di kb_service.py
         result = ask_knowledge_base(request.question)
         
         return {
@@ -545,3 +589,135 @@ def ask_assistant_endpoint(request: QuestionRequest, current_user: User = Depend
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to query assistant: " + str(e))
+
+
+# ─── Conversation Memory Endpoints (Session 10) ───────────────────────────────
+
+def _fmt_msg(msg: Message) -> MessageResponse:
+    """Helper: convert Message ORM object ke MessageResponse schema."""
+    return MessageResponse(
+        id=msg.id,
+        conversation_id=msg.conversation_id,
+        role=msg.role,
+        content=msg.content,
+        created_at=msg.created_at.isoformat(),
+    )
+
+def _fmt_conv(conv: Conversation, include_messages: bool = False) -> ConversationResponse:
+    """Helper: convert Conversation ORM object ke ConversationResponse schema."""
+    messages = [_fmt_msg(m) for m in conv.messages] if include_messages else []
+    return ConversationResponse(
+        id=conv.id,
+        user_id=conv.user_id,
+        title=conv.title,
+        created_at=conv.created_at.isoformat(),
+        messages=messages,
+    )
+
+
+@app.post("/api/v1/conversations", status_code=201)
+def create_conversation(
+    body: ConversationCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Part 3 — Conversation APIs (CREATE):
+    Buat conversation baru dan kembalikan conversation_id.
+    """
+    conv = conversation_service.create_conversation(db, user_id=current_user.id, title=body.title)
+    return {"conversation_id": conv.id, "title": conv.title, "created_at": conv.created_at.isoformat()}
+
+
+@app.get("/api/v1/conversations")
+def list_conversations(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Part 3 — Conversation APIs (LIST):
+    Daftar semua conversation milik user yang sedang login.
+    """
+    convs = conversation_service.list_conversations(db, user_id=current_user.id)
+    return [_fmt_conv(c) for c in convs]
+
+
+@app.get("/api/v1/conversations/{conversation_id}")
+def get_conversation(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Part 7 — Continue Existing Conversations:
+    Ambil conversation beserta semua message-nya.
+    """
+    conv = conversation_service.get_conversation(db, conversation_id, user_id=current_user.id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="Conversation tidak ditemukan")
+    return _fmt_conv(conv, include_messages=True)
+
+
+@app.post("/api/v1/conversations/{conversation_id}/messages", status_code=201)
+def send_message(
+    conversation_id: int,
+    body: MessageSend,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Part 4 — Send Message API:
+    Orkestrasi lengkap: simpan user message → load history → build prompt
+    → panggil Bedrock → simpan AI response → kembalikan response.
+    """
+    if not body.content.strip():
+        raise HTTPException(status_code=422, detail="Pesan tidak boleh kosong")
+
+    ai_message = conversation_service.send_message(
+        db,
+        conversation_id=conversation_id,
+        user_id=current_user.id,
+        user_content=body.content.strip(),
+    )
+
+    if ai_message is None:
+        raise HTTPException(status_code=404, detail="Conversation tidak ditemukan atau bukan milik Anda")
+
+    return _fmt_msg(ai_message)
+
+
+@app.patch("/api/v1/conversations/{conversation_id}")
+def rename_conversation(
+    conversation_id: int,
+    body: ConversationRename,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Challenge — Rename Conversation:
+    Ganti title conversation dengan nama yang lebih bermakna.
+    """
+    conv = conversation_service.rename_conversation(
+        db,
+        conversation_id=conversation_id,
+        user_id=current_user.id,
+        title=body.title.strip(),
+    )
+    if conv is None:
+        raise HTTPException(status_code=404, detail="Conversation tidak ditemukan")
+    return _fmt_conv(conv)
+
+
+@app.delete("/api/v1/conversations/{conversation_id}", status_code=204)
+def delete_conversation(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Hapus conversation beserta semua message-nya."""
+    conv = conversation_service.get_conversation(db, conversation_id, user_id=current_user.id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="Conversation tidak ditemukan")
+    db.delete(conv)
+    db.commit()
+    return None

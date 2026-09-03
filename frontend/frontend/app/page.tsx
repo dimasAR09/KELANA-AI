@@ -463,6 +463,9 @@ export default function Home() {
                 <Link href="/profile" className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition">
                   👤 Profil
                 </Link>
+                <Link href="/chat" className="px-3 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 text-xs font-semibold border border-indigo-500/30 transition">
+                  💬 Chat AI
+                </Link>
                 <Link href="/trips" className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition">
                   📜 Riwayat
                 </Link>

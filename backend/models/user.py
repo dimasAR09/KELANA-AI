@@ -14,3 +14,4 @@ class User(Base):
     
     # Relasi ke tabel trips
     trips = relationship("Trip", back_populates="owner")
+    conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")

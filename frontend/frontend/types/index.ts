@@ -26,3 +26,29 @@ export interface Trip {
 }
 
 export type SortOption = 'latest' | 'oldest' | 'highest_budget';
+
+// ─── Conversation Memory (Session 10) ────────────────────────────────────────
+
+export interface Message {
+  id: number;
+  conversation_id: number;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+}
+
+export interface Conversation {
+  id: number;
+  user_id: number;
+  title: string | null;
+  created_at: string;
+  messages: Message[];
+}
+
+export interface ConversationSummary {
+  id: number;
+  user_id: number;
+  title: string | null;
+  created_at: string;
+  messages: Message[];
+}

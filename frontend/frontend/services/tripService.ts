@@ -125,3 +125,109 @@ export async function askAssistant(question: string) {
   }
   return res.json();
 }
+
+// ─── Conversation Memory API (Session 10) ────────────────────────────────────
+
+/**
+ * POST /api/v1/conversations
+ * Buat conversation baru, kembalikan { conversation_id, title, created_at }
+ */
+export async function createConversation(title?: string) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/conversations`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ title: title ?? null }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail || 'Gagal membuat conversation');
+  }
+  return res.json() as Promise<{ conversation_id: number; title: string | null; created_at: string }>;
+}
+
+/**
+ * GET /api/v1/conversations
+ * Daftar semua conversation milik user yang sedang login.
+ */
+export async function listConversations() {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/conversations`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Gagal memuat daftar conversation');
+  return res.json();
+}
+
+/**
+ * GET /api/v1/conversations/{id}
+ * Ambil detail conversation beserta semua messages-nya.
+ */
+export async function getConversation(conversationId: number) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/conversations/${conversationId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Gagal memuat conversation');
+  return res.json();
+}
+
+/**
+ * POST /api/v1/conversations/{id}/messages
+ * Kirim pesan ke conversation, terima AI response.
+ */
+export async function sendMessage(conversationId: number, content: string) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/conversations/${conversationId}/messages`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail || 'Gagal mengirim pesan');
+  }
+  return res.json();
+}
+
+/**
+ * PATCH /api/v1/conversations/{id}
+ * Challenge: rename conversation title.
+ */
+export async function renameConversation(conversationId: number, title: string) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/conversations/${conversationId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail || 'Gagal mengganti nama conversation');
+  }
+  return res.json();
+}
+
+/**
+ * DELETE /api/v1/conversations/{id}
+ * Hapus conversation beserta semua messages-nya.
+ */
+export async function deleteConversation(conversationId: number) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/conversations/${conversationId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Gagal menghapus conversation');
+  // 204 No Content — tidak ada body
+  return true;
+}

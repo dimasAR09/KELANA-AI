@@ -190,6 +190,12 @@ export default function TripHistoryPage() {
 
           <div className="flex items-center gap-3">
             <Link
+              href="/chat"
+              className="px-3.5 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/20 text-indigo-300 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+            >
+              💬 Chat AI
+            </Link>
+            <Link
               href="/assistant"
               className="px-3.5 py-2.5 rounded-xl bg-indigo-600/20 border border-indigo-500/30 hover:bg-indigo-600/30 text-indigo-300 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
             >

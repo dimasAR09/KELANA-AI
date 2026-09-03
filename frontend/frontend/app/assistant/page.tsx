@@ -46,7 +46,7 @@ export default function AssistantPage() {
 
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div>
-            <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
+            <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-linear-to-r from-indigo-400 to-cyan-400">
               KelanaAI Assistant
             </h1>
             <p className="text-slate-400 text-sm mt-1">Travel Assistant (KelanaAI)</p>
@@ -56,6 +56,12 @@ export default function AssistantPage() {
             className="text-sm font-bold text-slate-400 hover:text-white transition"
           >
             ← Back to Dashboard
+          </Link>
+          <Link
+            href="/chat"
+            className="px-3 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 text-xs font-semibold border border-indigo-500/30 transition"
+          >
+            💬 Chat AI
           </Link>
         </div>
 
@@ -69,13 +75,13 @@ export default function AssistantPage() {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="Contoh: Apa aturan Travel terbaru?"
-            className="flex-1 bg-transparent text-white px-4 py-2 outline-none text-sm placeholder:text-slate-500"
+            className="flex-1 bg-transparent px-4 py-2 outline-none text-sm text-white placeholder:opacity-50"
             disabled={loading}
           />
           <button
             type="submit"
             disabled={loading || !question.trim()}
-            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm font-bold rounded-xl transition cursor-pointer"
+            className="px-6 py-2.5 enabled:bg-indigo-600 enabled:hover:bg-indigo-500 enabled:text-white disabled:bg-slate-800 disabled:text-slate-500 text-sm font-bold rounded-xl transition cursor-pointer"
           >
             {loading ? 'Thinking...' : 'Ask AI'}
           </button>
