@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, HTTPException, status, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,9 +31,16 @@ app = FastAPI(
     version="1.0.0"
 )
 
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://kelana-ai-henna.vercel.app",
+    os.getenv("FRONTEND_URL", ""),
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"],
+    allow_origins=[o for o in ALLOWED_ORIGINS if o],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
