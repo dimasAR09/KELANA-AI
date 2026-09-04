@@ -310,7 +310,8 @@ export default function Home() {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';
 
-      const res = await fetch('http://localhost:8000/api/v1/trips', {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+      const res = await fetch(`${API_BASE_URL}/trips`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
