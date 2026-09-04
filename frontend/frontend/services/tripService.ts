@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 const getToken = () => {
   if (typeof window !== 'undefined') {
@@ -50,7 +50,7 @@ export async function getMe() {
 export async function getTrips() {
   const token = localStorage.getItem('token') || localStorage.getItem('access_token');
 
-  const response = await fetch('http://localhost:8000/api/v1/trips', {
+  const response = await fetch(`${API_BASE_URL}/trips`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
