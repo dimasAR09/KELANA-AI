@@ -231,3 +231,29 @@ export async function deleteConversation(conversationId: number) {
   // 204 No Content — tidak ada body
   return true;
 }
+
+export async function shareTripEmail(tripId: number) {
+  const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+  const response = await fetch(`${API_BASE_URL}/trips/${tripId}/share`, {
+    method: 'POST',
+    headers: {
+      'Authorization': token ? `Bearer ${token}` : '',
+    },
+  });
+  if (!response.ok) throw new Error('Gagal memproses pengiriman email');
+  return response.json();
+}
+
+export async function generateAiImage(prompt: string) {
+  const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+  const response = await fetch(`${API_BASE_URL}/ai/generate-image`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': token ? `Bearer ${token}` : '',
+    },
+    body: JSON.stringify({ prompt }),
+  });
+  if (!response.ok) throw new Error('Gagal membuat gambar AI');
+  return response.json();
+}

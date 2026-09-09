@@ -729,3 +729,81 @@ def delete_conversation(
     db.delete(conv)
     db.commit()
     return None
+
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+class ImageGenRequest(BaseModel):
+    prompt: str
+
+@app.post("/api/v1/trips/{trip_id}/share")
+def share_itinerary_email(trip_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Mengirim itinerary trip langsung ke email user yang login menggunakan Gmail SMTP"""
+    trip = db.query(Trip).filter(Trip.id == trip_id, Trip.user_id == current_user.id).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip tidak ditemukan")
+    
+    destination_email = current_user.email
+    sender_email = os.getenv("SMTP_USER")
+    app_password = os.getenv("SMTP_PASSWORD")
+    
+    if not sender_email or not app_password:
+        raise HTTPException(status_code=500, detail="Konfigurasi SMTP server belum lengkap di environment variables.")
+    
+    subject = f"✈️ KelanaAI Itinerary: {trip.destination}"
+    body_text = f"Halo {current_user.name}!\n\nBerikut adalah detail perjalanan ke {trip.destination} ({trip.days} hari).\nBudget: USD ${trip.budget:,.2f}\n\nRekomendasi AI:\n{trip.ai_recommendation}\n\nDikirim melalui KelanaAI."
+    
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = destination_email
+    message["Subject"] = subject
+    message.attach(MIMEText(body_text, "plain", "UTF-8"))
+    
+    try:
+        with smtplib.SMTP(os.getenv("SMTP_SERVER", "smtp.gmail.com"), int(os.getenv("SMTP_PORT", 587))) as server:
+            server.starttls()
+            server.login(sender_email, app_password)
+            server.sendmail(sender_email, destination_email, message.as_string())
+            
+        return {"status": "success", "message": f"Itinerary berhasil dikirim ke {destination_email}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal mengirim email via SMTP: {str(e)}")
+
+@app.post("/api/v1/ai/generate-image")
+def generate_destination_image(request: ImageGenRequest, current_user: User = Depends(get_current_user)):
+    """Generate gambar destinasi wisata menggunakan AWS Bedrock Titan Image Generator"""
+    try:
+        bedrock_runtime = boto3.client(
+            'bedrock-runtime',
+            region_name=os.getenv("AWS_REGION", "ap-southeast-2"),
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
+        )
+        
+        payload = {
+            "taskType": "TEXT_IMAGE",
+            "textToImageParams": {"text": request.prompt},
+            "imageGenerationConfig": {
+                "numberOfImages": 1,
+                "quality": "standard",
+                "width": 512,
+                "height": 512,
+                "cfgScale": 8.0
+            }
+        }
+        
+        response = bedrock_runtime.invoke_model(
+            modelId="amazon.titan-image-generator-v1",
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps(payload)
+        )
+        
+        response_body = json.loads(response.get('body').read())
+        base64_image = response_body.get('images')[0]
+        image_url = f"data:image/jpeg;base64,{base64_image}"
+        
+        return {"prompt": request.prompt, "image_url": image_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal generate gambar Bedrock: {str(e)}")
