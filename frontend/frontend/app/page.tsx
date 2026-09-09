@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { getMe } from '@/services/tripService';
 import { User } from '@/types';
+import { AiImageGeneratorBox, VoiceAssistantButton } from '@/components/V2Features';
 
 // ─── Icon Components ──────────────────────────────────────────────────────────
 
@@ -30,7 +31,7 @@ const CalendarIcon = () => (
 );
 const CompassIcon = () => (
   <svg className="w-5 h-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 4a1 1 0 012 0v1a1 1 0 01-2 0V4zm0 14a1 1 0 012 0v1a1 1 0 01-2 0v-1zM4 11a1 1 0 010-2h1a1 1 0 010 2H4zm14 0a1 1 0 010-2h1a1 1 0 010 2h-1zM8.05 8.05a1 1 0 011.414 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zm7.778 7.778a1 1 0 011.414 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zM8.05 15.95a1 1 0 010 1.414l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 0zm7.778-7.778a1 1 0 010 1.414l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 4a1 1 0 012 0v1a1 1 0 01-2 0V4zm0 14a1 1 0 012 0v1a1 1 0 01-2 0v-1zM4 11a1 1 0 010-2h1a1 1 0 010 2H4zm14 0a1 1 0 010-2h1a1 1 0 010 2h-1zM8.05 8.05a1 1 0 011.414 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zm7.778 7.778a1 1 0 011.414 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zM8.05 15.95a1 1 0 010 1.414l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 0zm7.778-7.778a1 1 0 010 1.414l-.707.707a1 1 0 01-1.414-1.414l-.707-.707a1 1 0 011.414 0z" />
   </svg>
 );
 const CheckCircleIcon = () => (
@@ -51,10 +52,10 @@ const DESTINATION_SPOTS: Record<string, string[]> = {
 };
 
 const TRAVEL_STYLES = [
-  { id: 'family',      name: 'Keluarga',             icon: '👨‍👩‍👧‍👦', desc: 'Nyaman & santai' },
+  { id: 'family',      name: 'Keluarga',            icon: '👨‍👩‍👧‍👦', desc: 'Nyaman & santai' },
   { id: 'backpacker',  name: 'Hemat / Backpacker',   icon: '🎒', desc: 'Efisien & terjangkau' },
   { id: 'luxury',      name: 'Mewah',                icon: '✨', desc: 'Eksklusif & premium' },
-  { id: 'solo',        name: 'Solo Adventure',       icon: '🧗', desc: 'Bebas & eksploratif' },
+  { id: 'solo',        name: 'Solo Adventure',      icon: '🧗', desc: 'Bebas & eksploratif' },
   { id: 'romantic',    name: 'Pasangan',             icon: '👩‍❤️‍👨', desc: 'Romantis & intim' },
   { id: 'culinary',    name: 'Kuliner',              icon: '🍜', desc: 'Eksplor makanan lokal' },
 ];
@@ -235,7 +236,6 @@ export default function Home() {
   const [generatedResult, setGeneratedResult] = useState<TripResult | null>(null);
 
   useEffect(() => {
-    // Load persisted result from localStorage
     try {
       const saved = localStorage.getItem('kelana_ai_trip');
       if (saved) {
@@ -245,7 +245,6 @@ export default function Home() {
       console.error('Gagal membaca dari localStorage:', e);
     }
 
-    // Check auth
     const checkAuth = async () => {
       try {
         const userData = await getMe();
@@ -359,7 +358,6 @@ export default function Home() {
       console.log('Backend offline / error 500, menjalankan simulasi fallback presisi...', error);
     }
 
-    // Fallback simulation
     setLoadingStep('Menganalisis karakteristik destinasi & gaya perjalanan...');
     setTimeout(() => setLoadingStep('Menghitung alokasi budget harian efisien...'), 1000);
     setTimeout(() => setLoadingStep(`Menyusun ${days} hari itinerary presisi...`), 2000);
@@ -553,20 +551,26 @@ export default function Home() {
           </div>
 
           <form onSubmit={handleGenerate} className="space-y-6">
-            {/* Destinasi */}
+            {/* Destinasi dengan Voice Assistant */}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
                 <MapPinIcon />
-                <span>DESTINASI TUJUAN (Pencarian Teks)</span>
+                <span>DESTINASI TUJUAN (Ketik atau Bicara 🎤)</span>
               </label>
-              <input
-                type="text"
-                value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-                placeholder="Cari atau ketik destinasi: Jepang, Bali, Yogyakarta, Swiss..."
-                className="w-full px-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-white placeholder:text-slate-500 text-base"
-                required
-              />
+              
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  value={destination}
+                  onChange={(e) => setDestination(e.target.value)}
+                  placeholder="Cari atau ketik destinasi: Jepang, Bali, Yogyakarta, Swiss..."
+                  className="flex-1 px-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-white placeholder:text-slate-500 text-base"
+                  required
+                />
+                
+                <VoiceAssistantButton onTextResult={(text) => setDestination(text)} />
+              </div>
+
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <span className="text-xs text-slate-400">Pilihan populer:</span>
                 {QUICK_DESTINATIONS.map((dest) => (
@@ -684,6 +688,9 @@ export default function Home() {
             </button>
           </form>
         </div>
+
+        {/* AI Image Generator Box Integration */}
+        <AiImageGeneratorBox />
 
         {/* Results Section */}
         {generatedResult && (
