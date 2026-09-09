@@ -1,4 +1,8 @@
 import os
+import json
+import boto3
+import logging
+import markdown
 from fastapi import FastAPI, HTTPException, status, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -41,7 +45,7 @@ ALLOWED_ORIGINS = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o for o in ALLOWED_ORIGINS if o],
-    allow_origins_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
