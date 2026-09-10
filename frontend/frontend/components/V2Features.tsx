@@ -51,7 +51,7 @@ export function AiImageGeneratorBox() {
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 mt-6 space-y-4">
-      <h3 className="text-lg font-bold text-white">🎨 AI Destination Image Generator (AWS Bedrock)</h3>
+      <h3 className="text-lg font-bold text-white">🎨 AI Destination Image Generator (OpenAI DALL-E 3)</h3>
       <div className="flex gap-2">
         <input 
           type="text"

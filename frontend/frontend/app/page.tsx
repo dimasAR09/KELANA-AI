@@ -579,7 +579,7 @@ export default function Home() {
                   }
 
                   // Ekstraksi Budget
-                  const budgetMatch = cleanText.match(/(?:budget|dana|uang)\s*(\d+)/);
+                  const budgetMatch = cleanText.match(/(?:budget|dana|uang|harga)\s*(\d+)/);
                   if (budgetMatch && budgetMatch[1]) {
                     setBudget(budgetMatch[1]);
                     cleanText = cleanText.replace(budgetMatch[0], '');
@@ -648,8 +648,7 @@ export default function Home() {
                   value={budget}
                   onChange={(e) => setBudget(e.target.value)}
                   placeholder="2000"
-                  step="100"
-                  min="50"
+                  step="any"
                   className="w-full px-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-white placeholder:text-slate-500 text-base"
                 />
                 <p className="text-xs text-emerald-400 font-medium pt-0.5">

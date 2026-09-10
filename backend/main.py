@@ -1,6 +1,7 @@
 import os
 import json
 import boto3
+from openai import OpenAI
 import logging
 import markdown
 from fastapi import FastAPI, HTTPException, status, Depends, Request
@@ -775,40 +776,21 @@ def share_itinerary_email(trip_id: int, current_user: User = Depends(get_current
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal mengirim email via SMTP: {str(e)}")
 
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 @app.post("/api/v1/ai/generate-image")
 def generate_destination_image(request: ImageGenRequest, current_user: User = Depends(get_current_user)):
-    """Generate gambar destinasi wisata menggunakan AWS Bedrock Titan Image Generator"""
+    """Generate Gambar destinasi wisata menggunakan OpenAI DALL-E 3"""
     try:
-        bedrock_runtime = boto3.client(
-            'bedrock-runtime',
-            region_name=os.getenv("AWS_REGION", "ap-southeast-2"),
-            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=request.prompt,
+            size="1024x1024",
+            quality="standard",
+            n=1,
         )
-        
-        payload = {
-            "taskType": "TEXT_IMAGE",
-            "textToImageParams": {"text": request.prompt},
-            "imageGenerationConfig": {
-                "numberOfImages": 1,
-                "quality": "standard",
-                "width": 512,
-                "height": 512,
-                "cfgScale": 8.0
-            }
-        }
-        
-        response = bedrock_runtime.invoke_model(
-            modelId="amazon.titan-image-generator-v1",
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps(payload)
-        )
-        
-        response_body = json.loads(response.get('body').read())
-        base64_image = response_body.get('images')[0]
-        image_url = f"data:image/jpeg;base64,{base64_image}"
-        
+        image_url = response.data[0].url
+
         return {"prompt": request.prompt, "image_url": image_url}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal generate gambar Bedrock: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gagal generate gambar OpenAI: {str(e)}")
