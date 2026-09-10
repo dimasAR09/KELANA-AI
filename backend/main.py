@@ -1,7 +1,7 @@
 import os
 import json
+import urllib.parse
 import boto3
-from openai import OpenAI
 import logging
 import markdown
 from fastapi import FastAPI, HTTPException, status, Depends, Request
@@ -776,21 +776,14 @@ def share_itinerary_email(trip_id: int, current_user: User = Depends(get_current
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal mengirim email via SMTP: {str(e)}")
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
 @app.post("/api/v1/ai/generate-image")
 def generate_destination_image(request: ImageGenRequest, current_user: User = Depends(get_current_user)):
-    """Generate Gambar destinasi wisata menggunakan OpenAI DALL-E 3"""
+    """Generate gambar destinasi wisata menggunakan Pollinations.ai secara gratis"""
     try:
-        response = client.images.generate(
-            model="dall-e-3",
-            prompt=request.prompt,
-            size="1024x1024",
-            quality="standard",
-            n=1,
-        )
-        image_url = response.data[0].url
-
+        
+        encoded_prompt = urllib.parse.quote(request.prompt)
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
+        
         return {"prompt": request.prompt, "image_url": image_url}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal generate gambar OpenAI: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gagal generate gambar: {str(e)}")
