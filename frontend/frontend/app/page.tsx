@@ -551,11 +551,11 @@ export default function Home() {
           </div>
 
           <form onSubmit={handleGenerate} className="space-y-6">
-            {/* Destinasi dengan Voice Assistant */}
+            {/* Destinasi dengan Voice Assistant Cerdas & Auto-Submit */}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
                 <MapPinIcon />
-                <span>DESTINASI TUJUAN (Ketik atau Bicara 🎤)</span>
+                <span>DESTINASI TUJUAN (Ketik atau Bicara 🎤 - Bisa Sebut Budget & Durasi Sekaligus)</span>
               </label>
               
               <div className="flex gap-2 items-center">
@@ -568,7 +568,57 @@ export default function Home() {
                   required
                 />
                 
-                <VoiceAssistantButton onTextResult={(text) => setDestination(text)} />
+                <VoiceAssistantButton onTextResult={(text) => {
+                  let cleanText = text.replace(/[.,!?]/g, '').trim().toLowerCase();
+                  
+                  // Ekstraksi Durasi (hari)
+                  const daysMatch = cleanText.match(/(\d+)\s*hari/);
+                  if (daysMatch && daysMatch[1]) {
+                    setDays(parseInt(daysMatch[1], 10));
+                    cleanText = cleanText.replace(daysMatch[0], '');
+                  }
+
+                  // Ekstraksi Budget
+                  const budgetMatch = cleanText.match(/(?:budget|dana|uang)\s*(\d+)/);
+                  if (budgetMatch && budgetMatch[1]) {
+                    setBudget(budgetMatch[1]);
+                    cleanText = cleanText.replace(budgetMatch[0], '');
+                  }
+
+                  // Ekstraksi Travel Style
+                  if (cleanText.includes('keluarga')) setTravelStyle('family');
+                  else if (cleanText.includes('backpacker') || cleanText.includes('hemat')) setTravelStyle('backpacker');
+                  else if (cleanText.includes('mewah')) setTravelStyle('luxury');
+                  else if (cleanText.includes('solo')) setTravelStyle('solo');
+                  else if (cleanText.includes('pasangan') || cleanText.includes('romantis')) setTravelStyle('romantic');
+                  else if (cleanText.includes('kuliner')) setTravelStyle('culinary');
+                  
+                  cleanText = cleanText.replace(/\b(keluarga|backpacker|hemat|mewah|solo|pasangan|romantis|kuliner)\b/g, '');
+
+                  // Ekstraksi Destinasi
+                  cleanText = cleanText.replace(/\b(selama|dengan|gaya|untuk|dong|ya|deh|sih|tolong|sekarang|besok|buatkan|jadwal|liburan|mau|jalan-jalan|jalan|pergi)\b/g, ' ').trim();
+                  
+                  const destMatch = cleanText.match(/\b(ke|di|menuju|eksplor)\s+([a-z\s]+)/);
+                  let finalDest = "";
+                  
+                  if (destMatch && destMatch[2]) {
+                    finalDest = destMatch[2].trim().split(/\s+/).slice(0, 2).join(' ');
+                  } else if (cleanText.length > 0) {
+                    finalDest = cleanText.trim().split(/\s+/).slice(0, 2).join(' ');
+                  }
+
+                  if (finalDest) {
+                    finalDest = finalDest.replace(/\b\w/g, c => c.toUpperCase());
+                    setDestination(finalDest);
+                  }
+
+                  // Auto-submit setelah parameter terisi
+                  setTimeout(() => {
+                    const generateBtn = document.getElementById('btn-generate');
+                    if (generateBtn) generateBtn.click();
+                  }, 800);
+                  
+                }} />
               </div>
 
               <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -680,6 +730,7 @@ export default function Home() {
             </div>
 
             <button
+              id="btn-generate"
               type="submit"
               disabled={isGenerating}
               className="w-full py-4 bg-gradient-to-r from-blue-600 hover:from-blue-500 to-indigo-600 hover:to-indigo-500 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-500/30 transition disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
