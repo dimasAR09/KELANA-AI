@@ -734,7 +734,7 @@ export default function Home() {
               disabled={isGenerating}
               className="w-full py-4 bg-gradient-to-r from-blue-600 hover:from-blue-500 to-indigo-600 hover:to-indigo-500 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-500/30 transition disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
             >
-              Generate Itinerary
+              Generate Trip
             </button>
           </form>
         </div>
@@ -746,7 +746,7 @@ export default function Home() {
         {generatedResult && (
           <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6 mt-10">
             <div className="flex flex-wrap justify-between items-center gap-3 pb-4 border-b border-slate-800">
-              <h3 className="text-2xl font-bold text-white">🎉 Itinerary Anda Sudah Siap!</h3>
+              <h3 className="text-2xl font-bold text-white">🎉 Trip Anda Sudah Siap!</h3>
               <div className="flex items-center gap-3">
                 <button
                   onClick={handlePrint}
