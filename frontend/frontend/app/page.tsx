@@ -819,6 +819,27 @@ export default function Home() {
           </div>
         )}
       </main>
+      <footer className="bg-slate-900 text-slate-300 py-10 mt-20 border-t border-slate-800 flex flex-col items-center test-center">
+        <div className="max-w-3xl px-4 space-y-4">
+          <h2 className="text-xl font-bold text-white flex items-center justify-center gap-2">
+            ✈️ KelanaAI
+          </h2>
+          <p className="text-sm text-slate-400">
+            Alamat: Citra indah City - Jonggol, Jawa Barat 16830<br />
+            Hubungi Langsung: 085719264955
+          </p>
+          <p className="text-sm text-slate-400">
+            © 2026 Hak Cipta Dilindungi. Sistem Perencana Perjalanan AI Independen.
+          </p>
+          <div className="mt-6 bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 text-xs text-slate-400 flex-center justify-center gap-2">
+            <span>🛡️</span>
+            <p>
+              Data perjalanan diprosses melalui Ai agent Kelana Ai dan
+              diSimpan secara END to END ke Database secara aman.
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
