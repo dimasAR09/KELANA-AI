@@ -234,6 +234,7 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
   const [generatedResult, setGeneratedResult] = useState<TripResult | null>(null);
+  const [weather, setWeather] = useState<{forecast: string, temperature: string} | null>(null);
 
   useEffect(() => {
     try {
@@ -270,6 +271,7 @@ export default function Home() {
 
   const handleClearResult = () => {
     setGeneratedResult(null);
+    setWeather(null);
     localStorage.removeItem('kelana_ai_trip');
   };
 
@@ -279,10 +281,16 @@ export default function Home() {
     setDays(3);
     setTravelStyle('family');
     setStyleSearchQuery('');
+    setWeather(null);
   };
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const openGoogleMapsRoute = (activities: string[]) => {
+    const query = activities.map(act => encodeURIComponent(act)).join('/');
+    window.open(`https://www.google.com/maps/dir/${query}`, '_blank');
   };
 
   const filteredTravelStyles = useMemo(() => {
@@ -301,15 +309,34 @@ export default function Home() {
 
     setIsGenerating(true);
     setGeneratedResult(null);
+    setWeather(null); // Mereset cuaca setiap kali menekan Generate Trip
 
     const parsedBudget = parseFloat(budget) || 2000;
     const selectedStyleObj = TRAVEL_STYLES.find((s) => s.id === travelStyle);
     const styleLabel = selectedStyleObj ? selectedStyleObj.name : travelStyle;
+    
+    // API_BASE_URL dipindah ke atas agar bisa diakses oleh fungsi cuaca
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+
+    // Fungsi khusus untuk menarik data cuaca
+    const fetchWeather = async () => {
+      try {
+        const weatherRes = await fetch(`${API_BASE_URL}/weather?destination=${destination.trim()}`);
+        if (weatherRes.ok) {
+          const weatherData = await weatherRes.json();
+          setWeather({
+            forecast: weatherData.forecast,
+            temperature: weatherData.temperature
+          });
+        }
+      } catch (e) {
+        console.log("Gagal mengambil data cuaca", e);
+      }
+    };
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';
 
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
       const res = await fetch(`${API_BASE_URL}/trips`, {
         method: 'POST',
         headers: {
@@ -352,6 +379,9 @@ export default function Home() {
           itinerary: parsedAi.itinerary,
           rawMarkdown: parsedAi.rawMarkdown,
         });
+        
+        // Memanggil API cuaca setelah hasil AI selesai disimpan
+        await fetchWeather();
         return;
       }
     } catch (error: unknown) {
@@ -361,7 +391,9 @@ export default function Home() {
     setLoadingStep('Menganalisis karakteristik destinasi & gaya perjalanan...');
     setTimeout(() => setLoadingStep('Menghitung alokasi budget harian efisien...'), 1000);
     setTimeout(() => setLoadingStep(`Menyusun ${days} hari itinerary presisi...`), 2000);
-    setTimeout(() => {
+    
+    // Callback diubah menjadi async agar bisa memanggil await fetchWeather()
+    setTimeout(async () => {
       setIsGenerating(false);
 
       const destLower = destination.trim().toLowerCase();
@@ -397,6 +429,9 @@ export default function Home() {
           };
         }),
       });
+
+      // Memanggil API cuaca pada skenario fallback/simulasi
+      await fetchWeather();
     }, 3200);
   };
 
@@ -767,6 +802,12 @@ export default function Home() {
               <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
                 <span className="text-xs text-slate-400 block mb-1">Destinasi</span>
                 <span className="text-lg font-bold text-indigo-400">{generatedResult.destination}</span>
+                {weather && (
+                  <div className="mt-2 inline-flex items-center gap-2 px-2.5 py-1 bg-slate-900 rounded-lg border-slate-700/50 text-xs text-slate-300 shadow-inner">
+                    <span>{weather.forecast}</span>
+                    <span className="font-bold text-white border-l border-slate-700 pl-2">{weather.temperature}</span>
+                  </div>
+                )}
               </div>
               <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
                 <span className="text-xs text-slate-400 block mb-1">Total Budget</span>
@@ -779,6 +820,28 @@ export default function Home() {
               <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
                 <span className="text-xs text-slate-400 block mb-1">Gaya Perjalanan</span>
                 <span className="text-lg font-bold text-sky-400">{generatedResult.style}</span>
+              </div>
+            </div>
+
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4">
+              <h4 className="font-bold text-white text-lg">📊 Estimasi Rincian Anggaran (Smart Breakdown)</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                  <span className="text-xs text-slate-400 block">🏨 Akomodasi</span>
+                  <span className="text-sm font-bold text-indigo-400">Proporsi 40%</span>
+                </div>
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                  <span className="text-xs text-slate-400 block">🍜 Konsumsi</span>
+                  <span className="text-sm font-bold text-emerald-400">Proporsi 30%</span>
+                </div>
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                  <span className="text-xs text-slate-400 block">🚗 Transportasi</span>
+                  <span className="text-sm font-bold text-amber-400">Proporsi 15%</span>
+                </div>
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                  <span className="text-xs text-slate-400 block">🎫 Aktivitas</span>
+                  <span className="text-sm font-bold text-sky-400">Proporsi 15%</span>
+                </div>
               </div>
             </div>
 
@@ -811,6 +874,12 @@ export default function Home() {
                           </li>
                         ))}
                       </ul>
+                      <button
+                        onClick={() => openGoogleMapsRoute(dayPlan.activities)}
+                        className="mt-4 w-full justify-center text-xs bg-slate-700/50 hover:bg-slate-600 text-slate-300 py-2 px-3 rounded-lg transition-colors flex items-center gap-2 border-slate-600/50"
+                        >
+                          🗺️ Buka Rute Hari Ini di Google Maps
+                        </button>
                     </div>
                   ))}
                 </div>

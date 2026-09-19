@@ -227,6 +227,31 @@ def health_check(db: Session = Depends(get_db)):
         "db_detail": db_detail
     }
 
+def calculate_budget_breakdown(total_budget: float, travel_style: str):
+    """Menghitung persentase alokasi anggaran berdasarkan gaya perjalanan"""
+    style = travel_style.lower() if travel_style else "family"
+    
+    breakdown = {
+        "accommodation": 0.40, # 40% Hotel/Penginapan
+        "food": 0.30,          # 30% Konsumsi & Kuliner
+        "transport": 0.15,     # 15% Transportasi lokal
+        "activities": 0.15     # 15% Tiket masuk & hiburan
+    }
+    
+    if "backpacker" in style or "hemat" in style:
+        breakdown = {"accommodation": 0.30, "food": 0.35, "transport": 0.20, "activities": 0.15}
+    elif "luxury" in style or "mewah" in style:
+        breakdown = {"accommodation": 0.50, "food": 0.25, "transport": 0.15, "activities": 0.10}
+    elif "culinary" in style or "kuliner" in style:
+        breakdown = {"accommodation": 0.30, "food": 0.45, "transport": 0.10, "activities": 0.15}
+
+    return {
+        "accommodation": round(total_budget * breakdown["accommodation"], 2),
+        "food": round(total_budget * breakdown["food"], 2),
+        "transport": round(total_budget * breakdown["transport"], 2),
+        "activities": round(total_budget * breakdown["activities"], 2),
+    }
+
 @app.post("/api/v1/trips", response_model=TripResponse)    
 def create_trip(request: TripRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
@@ -735,6 +760,29 @@ def delete_conversation(
     db.delete(conv)
     db.commit()
     return None
+
+import random
+
+@app.get("/api/v1/weeather")
+def get_weather_forecast(destination: str):
+"""
+Endpoint cuaca sementara.
+mengembalikan data cuaca acak yang logis untuk destinasi.
+"""
+conditions = [
+    "Cerah ☀️",
+    "Berawan ⛅",
+    "Cerah Berawan 🌤️",
+    "Hujan Ringan 🌧️",
+    "Hujan Deras / Baadai ⛈️"
+]
+temp = random.randint(22, 33)
+
+return {
+    "destination": destination,
+    "forecast": random.choice(conditions),
+    "temperature": f"{temp}°C"
+}
 
 import smtplib
 from email.mime.text import MIMEText
