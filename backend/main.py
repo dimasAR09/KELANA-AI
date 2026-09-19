@@ -763,26 +763,26 @@ def delete_conversation(
 
 import random
 
-@app.get("/api/v1/weeather")
+@app.get("/api/v1/weather")
 def get_weather_forecast(destination: str):
-"""
-Endpoint cuaca sementara.
-mengembalikan data cuaca acak yang logis untuk destinasi.
-"""
-conditions = [
-    "Cerah ☀️",
-    "Berawan ⛅",
-    "Cerah Berawan 🌤️",
-    "Hujan Ringan 🌧️",
-    "Hujan Deras / Baadai ⛈️"
-]
-temp = random.randint(22, 33)
-
-return {
-    "destination": destination,
-    "forecast": random.choice(conditions),
-    "temperature": f"{temp}°C"
-}
+    """
+    Endpoint cuaca sementara. 
+    Mengembalikan data cuaca acak yang logis untuk destinasi.
+    """
+    conditions = [
+        "Cerah ☀️", 
+        "Berawan ⛅", 
+        "Cerah Berawan 🌤️", 
+        "Hujan Ringan 🌧️", 
+        "Hujan Deras / Badai ⛈️"
+    ]
+    temp = random.randint(22, 33)
+    
+    return {
+        "destination": destination,
+        "forecast": random.choice(conditions),
+        "temperature": f"{temp}°C"
+    }
 
 import smtplib
 from email.mime.text import MIMEText
