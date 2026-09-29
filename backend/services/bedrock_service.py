@@ -88,7 +88,7 @@ class BedrockService:
         destination: str,
         days: int,
         budget: float,
-        travel_style: str
+        travel_style: str,
         bawa_anak: bool = False,
         cuaca: str = "Cerah",
         filtered_places: str = ""
