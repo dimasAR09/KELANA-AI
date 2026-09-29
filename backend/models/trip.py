@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Text, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -17,3 +17,13 @@ class Trip(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     owner = relationship("User", back_populates="trips")
+
+class DestinationDB(Base):
+    __tablename__ = "destinations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    nama = Column(String, index=True)
+    kota = Column(String)
+    kondisi_cuaca = Column(String) 
+    ramah_anak = Column(Boolean)
+    kategori_biaya = Column(String)

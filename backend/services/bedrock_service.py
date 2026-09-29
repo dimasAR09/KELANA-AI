@@ -89,6 +89,9 @@ class BedrockService:
         days: int,
         budget: float,
         travel_style: str
+        bawa_anak: bool = False,
+        cuaca: str = "Cerah",
+        filtered_places: str = ""
     ) -> str:
         """Generate a rich, structured trip itinerary using AWS Bedrock AI for up to 30 days with optional unlimited budget."""
         
@@ -96,6 +99,18 @@ class BedrockService:
         is_unlimited = budget >= 99999 or budget <= 0
         budget_str = "Unlimited / No Limit (Luxury & Flexibility)" if is_unlimited else f"USD {budget:,.2f}"
         daily_budget_str = "Unlimited" if is_unlimited else f"USD {budget / max(days, 1):,.2f}"
+
+        child_status = "Yes (Must be Family-Friendly and Kid-Friendly)" if bawa_anak else "No"
+
+        expert_system_constraints = ""
+        if filtered_places:
+            expert_system_constraints = f"""
+=== EXPERT SYSTEM CONSTRAINTS (MANDATORY) ===
+You MUST include these specific locations in the itinerary as they have been pre-filtered by our rule engine to match the user's safety and logistical needs:
+{filtered_places}
+
+Ensure the activities match the forecasted weather: {cuaca}.
+"""
 
         prompt = f"""You are a world-class travel planner with 20 years of experience crafting highly detailed, personalized travel itineraries. Your task is to create an exceptional, comprehensive {days}-day itinerary for {destination}.
 
@@ -105,6 +120,9 @@ class BedrockService:
 - Total Budget  : {budget_str}
 - Daily Budget  : {daily_budget_str}
 - Travel Style  : {travel_style}
+- Traveling with Kids: {child_status}
+- Forecasted Weather: {cuaca}
+{expert_system_constraints}
 
 === STRICT OUTPUT FORMAT (MANDATORY) ===
 Respond ONLY in valid Markdown. Follow this exact structure for EVERY single day (Day 1 through Day {days}):
@@ -117,6 +135,8 @@ Respond ONLY in valid Markdown. Follow this exact structure for EVERY single day
 - **Total Budget:** {budget_str}
 - **Daily Budget:** {daily_budget_str}
 - **Travel Style:** {travel_style}
+- **Weather Condition:** {cuaca}
+- **Kid-Friendly:** {child_status}
 
 ## 🗓️ Daily Itinerary
 

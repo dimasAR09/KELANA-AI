@@ -15,7 +15,7 @@ import markdown
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from database import SessionLocal, init_db
-from models.trip import Trip
+from models.trip import Trip, DestinationDB
 from models.user import User
 from services.bedrock_service import bedrock_service
 import bcrypt
@@ -121,6 +121,8 @@ class TripRequest(BaseModel):
     days: int
     budget: float
     travel_style: Optional[str] = "Family"
+    bawa_anak: Optional[bool] = False
+    prediksi_cuaca: Optional[str] = "Cerah"
 
 class TripUpdate(BaseModel):
     budget: float
@@ -268,6 +270,21 @@ def create_trip(request: TripRequest, current_user: User = Depends(get_current_u
         category = "Standard"
     
     travel_style = request.travel_style if request.travel_style else category
+
+    query = db.query(DestinationDB).filter(DestinationDB.kota.ilike(f"%{request.destination}%"))
+
+    if request.bawa_anak:
+        query = query.filter(DestinationDB.ramah_anak == True)
+
+    if request.prediksi_cuaca.lower() in ["hujan", "badai", "hujan deras / badai ⛈️"]:
+        query = query.filter(DestinationDB.kondisi_cuaca == "Indoor")
+
+    if category == "Backpacker":
+        query = query.filter(DestinationDB.kategori_biaya == "Rendah")
+
+    kandidat_destinasi = query.limit(10).all()
+    list_tempat = [d.nama for d in kandidat_destinasi]
+    tempat_difilter = ", ".join(list_tempat) if list_tempat else ""
     
     # Determine transportation based on destination & category
     destination_lower = request.destination.strip().lower()
@@ -292,7 +309,10 @@ def create_trip(request: TripRequest, current_user: User = Depends(get_current_u
             destination=request.destination,
             days=request.days,
             budget=request.budget,
-            travel_style=travel_style
+            travel_style=travel_style,
+            bawa_anak=request.bawa_anak,
+            cuaca=request.prediksi_cuaca,
+            filtered_places=tempat_difilter
         )
     except Exception as e:
         print(f"Error generating AI recommendation: {e}")
