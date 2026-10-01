@@ -11,3 +11,7 @@ bcrypt
 python-jose[cryptography]
 python-multipart
 psycopg[binary]
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-instrumentation-fastapi
+opentelemetry-exporter-otlp

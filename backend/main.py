@@ -29,12 +29,34 @@ from services.trip_service import (
 from services import conversation_service
 from models.conversation import Conversation, Message
 from datetime import timedelta
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 app = FastAPI(
     title="KelanaAI API",
     description="AI-Powered Travel Planning API",
     version="1.0.0"
 )
+if os.getenv("JAEGER_ENABLED", "false").lower() == "true":
+    try:
+        resource = Resource.create({"service.name": "kelana-ai-backend"})
+        provider = TracerProvider(resource=resource)
+        
+        jaeger_endpoint = os.getenv("JAEGER_ENDPOINT", "http://localhost:4317")
+        exporter = OTLPSpanExporter(endpoint=jaeger_endpoint, insecure=True)
+        provider.add_span_processor(BatchSpanProcessor(exporter))
+        trace.set_tracer_provider(provider)
+        
+        FastAPIInstrumentor.instrument_app(app)
+        print(f"✅ Jaeger OpenTelemetry aktif (Endpoint: {jaeger_endpoint})")
+    except Exception as e:
+        print(f"❌ Gagal mengaktifkan Jaeger: {e}")
+else:
+    print("ℹ️ Jaeger OpenTelemetry dimatikan (JAEGER_ENABLED=false)")
 
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
